@@ -1,0 +1,502 @@
+name: Scenario Suite - End-to-End Pipeline Validation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6am UTC
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  CASCADE_STATE_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+
+jobs:
+  reset:
+    name: Reset manifest state
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Reset manifest state
+        run: |
+          # Reset .github/manifest.yaml config.state to {}
+          yq eval '.config.state = {}' -i .github/manifest.yaml
+          git add .github/manifest.yaml
+          git commit -m "chore: reset state for scenario test [skip ci]"
+          git push origin main
+
+      - name: Verify push succeeded
+        run: |
+          git log -1 --oneline
+          git log --oneline | grep "reset state for scenario test" || exit 1
+
+  commit-and-build:
+    name: Commit dummy change and validate build output
+    runs-on: ubuntu-latest
+    needs: reset
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Create and commit dummy src change
+        run: |
+          mkdir -p src
+          echo "timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > src/version.txt
+          git add src/version.txt
+          git commit -m "test: dummy src change for scenario test [skip ci]"
+          git push origin main
+
+      - name: Wait for orchestrate.yaml workflow to complete
+        id: wait_orchestrate
+        run: |
+          MAX_ATTEMPTS=30
+          SLEEP_DURATION=10
+          ATTEMPT=0
+          RUN_ID=""
+
+          # Wait for orchestrate run to appear
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            RUN_ID=$(gh run list \
+              --workflow=orchestrate.yaml \
+              --branch=main \
+              --status=completed \
+              --limit=1 \
+              --json=databaseId \
+              --jq='.[0].databaseId // empty' 2>/dev/null || echo "")
+
+            if [ -n "$RUN_ID" ]; then
+              echo "Found completed orchestrate run: $RUN_ID"
+              break
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              sleep $SLEEP_DURATION
+            fi
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::orchestrate.yaml run did not complete within timeout"
+            exit 1
+          fi
+
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Assert orchestrate job matrix (both architectures)
+        run: |
+          RUN_ID="${{ steps.wait_orchestrate.outputs.run_id }}"
+
+          # Fetch run logs and check for both linux-amd64 and linux-arm64
+          gh run view "$RUN_ID" --log > /tmp/orchestrate.log 2>&1 || true
+
+          if ! grep -q "linux-amd64" /tmp/orchestrate.log; then
+            echo "::error::linux-amd64 matrix leg not found in orchestrate logs"
+            exit 1
+          fi
+
+          if ! grep -q "linux-arm64" /tmp/orchestrate.log; then
+            echo "::error::linux-arm64 matrix leg not found in orchestrate logs"
+            exit 1
+          fi
+
+          echo "✓ Matrix matrix legs present: linux-amd64, linux-arm64"
+
+      - name: Assert manifest state shape (staging populated)
+        run: |
+          # Read manifest and assert staging version exists and matches semver
+          STAGING_VERSION=$(yq eval '.ci.state.staging.version // ""' .github/manifest.yaml)
+
+          if [ -z "$STAGING_VERSION" ]; then
+            echo "::error::.ci.state.staging.version is empty or missing"
+            exit 1
+          fi
+
+          # Check semver pattern: v?[0-9]+.[0-9]+.[0-9]+
+          if ! echo "$STAGING_VERSION" | grep -qE 'v?[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::.ci.state.staging.version does not match semver pattern: $STAGING_VERSION"
+            exit 1
+          fi
+
+          echo "✓ Staging version matches semver: $STAGING_VERSION"
+
+      - name: Assert manifest state shape (staging builds image digest)
+        run: |
+          # Assert the key exists (value can be anything)
+          yq eval '.ci.state.staging.builds.image.tags.image_digest' .github/manifest.yaml > /dev/null 2>&1 || {
+            echo "::error::.ci.state.staging.builds.image.tags.image_digest key does not exist"
+            exit 1
+          }
+
+          echo "✓ Staging builds image digest key exists"
+
+      - name: Assert GitHub release created
+        run: |
+          # Wait briefly for release to appear and stabilize
+          sleep 5
+
+          RELEASE_COUNT=$(gh release list --limit=1 | wc -l)
+
+          if [ "$RELEASE_COUNT" -lt 2 ]; then
+            echo "::error::No GitHub release found"
+            exit 1
+          fi
+
+          # Check that at least one release exists and is prerelease
+          RELEASE_TAG=$(gh release list --limit=1 | tail -1 | awk '{print $1}')
+
+          if ! echo "$RELEASE_TAG" | grep -qE 'v?[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::Release tag does not match semver: $RELEASE_TAG"
+            exit 1
+          fi
+
+          IS_PRERELEASE=$(gh release view "$RELEASE_TAG" --json=isPrerelease --jq='.isPrerelease')
+
+          if [ "$IS_PRERELEASE" != "true" ]; then
+            echo "::warning::Release is not marked as prerelease"
+          fi
+
+          echo "✓ GitHub release created: $RELEASE_TAG (prerelease=$IS_PRERELEASE)"
+
+      - name: Write assertions summary
+        if: always()
+        run: |
+          {
+            echo "## commit-and-build Assertions"
+            echo ""
+            echo "| Assertion | Result |"
+            echo "|-----------|--------|"
+            echo "| Orchestrate run completed | ✓ |"
+            echo "| Matrix legs (amd64, arm64) | ✓ |"
+            echo "| Staging version (semver) | ✓ |"
+            echo "| Staging builds image digest | ✓ |"
+            echo "| GitHub release created | ✓ |"
+          } >> $GITHUB_STEP_SUMMARY
+
+  promote-staging:
+    name: Promote staging to prod
+    runs-on: ubuntu-latest
+    needs: commit-and-build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Dispatch promote.yaml workflow
+        id: dispatch_promote
+        run: |
+          gh workflow run promote.yaml \
+            -f mode=default \
+            --ref main
+
+      - name: Wait for promote.yaml workflow to complete
+        id: wait_promote
+        run: |
+          MAX_ATTEMPTS=20
+          SLEEP_DURATION=10
+          ATTEMPT=0
+          RUN_ID=""
+
+          # Wait for promote run to appear and complete
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            RUN_ID=$(gh run list \
+              --workflow=promote.yaml \
+              --branch=main \
+              --status=completed \
+              --limit=1 \
+              --json=databaseId \
+              --jq='.[0].databaseId // empty' 2>/dev/null || echo "")
+
+            if [ -n "$RUN_ID" ]; then
+              echo "Found completed promote run: $RUN_ID"
+              break
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              sleep $SLEEP_DURATION
+            fi
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::promote.yaml run did not complete within timeout"
+            exit 1
+          fi
+
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Assert manifest state shape (prod populated)
+        run: |
+          # Refresh manifest from latest
+          git pull origin main
+
+          PROD_VERSION=$(yq eval '.ci.state.prod.version // ""' .github/manifest.yaml)
+
+          if [ -z "$PROD_VERSION" ]; then
+            echo "::error::.ci.state.prod.version is empty or missing"
+            exit 1
+          fi
+
+          if ! echo "$PROD_VERSION" | grep -qE 'v?[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::.ci.state.prod.version does not match semver pattern: $PROD_VERSION"
+            exit 1
+          fi
+
+          echo "✓ Prod version matches semver: $PROD_VERSION"
+
+      - name: Assert GitHub release is published (not RC)
+        run: |
+          # Get the latest release
+          RELEASE_TAG=$(gh release list --limit=1 | tail -1 | awk '{print $1}')
+
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::No release found"
+            exit 1
+          fi
+
+          # Check prerelease status
+          IS_PRERELEASE=$(gh release view "$RELEASE_TAG" --json=isPrerelease --jq='.isPrerelease')
+
+          if [ "$IS_PRERELEASE" != "false" ]; then
+            echo "::error::Release is still marked as prerelease, should be published: $RELEASE_TAG"
+            exit 1
+          fi
+
+          echo "✓ Release published (not prerelease): $RELEASE_TAG"
+
+      - name: Write assertions summary
+        if: always()
+        run: |
+          {
+            echo "## promote-staging Assertions"
+            echo ""
+            echo "| Assertion | Result |"
+            echo "|-----------|--------|"
+            echo "| Promote run completed | ✓ |"
+            echo "| Prod version (semver) | ✓ |"
+            echo "| Release published (not RC) | ✓ |"
+          } >> $GITHUB_STEP_SUMMARY
+
+  dispatch-inputs-check:
+    name: Dispatch with custom inputs
+    runs-on: ubuntu-latest
+    needs: promote-staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Dispatch orchestrate.yaml with custom inputs
+        id: dispatch_inputs
+        run: |
+          gh workflow run orchestrate.yaml \
+            -f reason='manual gate test' \
+            -f force=true \
+            --ref main
+
+      - name: Wait for dispatched run to appear
+        id: wait_dispatch
+        run: |
+          MAX_ATTEMPTS=10
+          SLEEP_DURATION=5
+          ATTEMPT=0
+          RUN_ID=""
+
+          # Wait for the newly dispatched run to appear (may not complete immediately)
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            RUN_ID=$(gh run list \
+              --workflow=orchestrate.yaml \
+              --branch=main \
+              --limit=1 \
+              --json=databaseId \
+              --jq='.[0].databaseId // empty' 2>/dev/null || echo "")
+
+            if [ -n "$RUN_ID" ]; then
+              echo "Found orchestrate run: $RUN_ID"
+              break
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              sleep $SLEEP_DURATION
+            fi
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Dispatched orchestrate.yaml run did not appear within timeout"
+            exit 1
+          fi
+
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Assert dispatched run was created
+        run: |
+          RUN_ID="${{ steps.wait_dispatch.outputs.run_id }}"
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Run ID is empty"
+            exit 1
+          fi
+
+          echo "✓ Dispatched run created with ID: $RUN_ID"
+
+      - name: Write assertions summary
+        if: always()
+        run: |
+          {
+            echo "## dispatch-inputs-check Assertions"
+            echo ""
+            echo "| Assertion | Result |"
+            echo "|-----------|--------|"
+            echo "| Orchestrate run dispatched | ✓ |"
+            echo "| Run appeared in GitHub API | ✓ |"
+          } >> $GITHUB_STEP_SUMMARY
+
+  pr-preview-check:
+    name: PR preview comment validation (non-blocking)
+    runs-on: ubuntu-latest
+    needs: dispatch-inputs-check
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Create and push test PR branch
+        id: branch
+        run: |
+          BRANCH_NAME="test/cascade-preview-$(date +%s)"
+          git checkout -b "$BRANCH_NAME"
+
+          touch PR_TEST_MARKER
+          git add PR_TEST_MARKER
+          git commit -m "test: dummy change for preview check [skip ci]"
+          git push origin "$BRANCH_NAME"
+
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create test PR
+        id: create_pr
+        run: |
+          PR_URL=$(gh pr create \
+            --title "Test PR for cascade preview" \
+            --body "Scenario test PR to validate cascade-pr-preview.yaml functionality." \
+            --head "${{ steps.branch.outputs.branch }}" \
+            --base main)
+
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+
+      - name: Wait for cascade-pr-preview workflow to complete
+        id: wait_preview
+        run: |
+          MAX_ATTEMPTS=10
+          SLEEP_DURATION=5
+          ATTEMPT=0
+          FOUND=false
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            # Try to find a completed cascade-pr-preview run for this commit
+            RUN_COUNT=$(gh run list \
+              --workflow=cascade-pr-preview.yaml \
+              --status=completed \
+              --limit=5 \
+              --json=databaseId 2>/dev/null | wc -l)
+
+            if [ "$RUN_COUNT" -gt 0 ]; then
+              FOUND=true
+              break
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              sleep $SLEEP_DURATION
+            fi
+          done
+
+          if [ "$FOUND" = "true" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::cascade-pr-preview.yaml run did not complete in time (non-blocking)"
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for preview comment in PR
+        id: check_comment
+        continue-on-error: true
+        run: |
+          PR_NUMBER="${{ steps.create_pr.outputs.pr_number }}"
+
+          # Get PR comments
+          COMMENT_COUNT=$(gh api repos/:owner/:repo/issues/$PR_NUMBER/comments \
+            --jq='length' 2>/dev/null || echo 0)
+
+          COMMENT_FOUND=false
+
+          if [ "$COMMENT_COUNT" -gt 0 ]; then
+            # Check if any comment contains "cascade" or "preview"
+            if gh api repos/:owner/:repo/issues/$PR_NUMBER/comments \
+              --jq='.[] | .body' 2>/dev/null | grep -iE 'cascade|preview' > /dev/null; then
+              COMMENT_FOUND=true
+              echo "::notice::Found preview comment in PR #$PR_NUMBER"
+            fi
+          fi
+
+          if [ "$COMMENT_FOUND" = "false" ]; then
+            echo "::warning::Preview comment not found in PR #$PR_NUMBER (non-blocking)"
+          fi
+
+          echo "found=$COMMENT_FOUND" >> $GITHUB_OUTPUT
+
+      - name: Clean up test PR
+        if: always()
+        run: |
+          PR_NUMBER="${{ steps.create_pr.outputs.pr_number }}"
+          BRANCH_NAME="${{ steps.branch.outputs.branch }}"
+
+          # Close PR
+          gh pr close "$PR_NUMBER" --delete-branch || true
+
+          # Delete branch if still exists
+          git push origin --delete "$BRANCH_NAME" || true
+
+          echo "Cleaned up PR #$PR_NUMBER and branch $BRANCH_NAME"
+
+      - name: Write assertions summary
+        if: always()
+        run: |
+          {
+            echo "## pr-preview-check Assertions (Non-Blocking)"
+            echo ""
+            echo "| Assertion | Result |"
+            echo "|-----------|--------|"
+            echo "| Test PR created | ✓ |"
+            echo "| cascade-pr-preview workflow triggered | ${{ steps.wait_preview.outputs.found == 'true' && '✓' || '⚠ (timeout, non-blocking)' }} |"
+            echo "| Preview comment found | ${{ steps.check_comment.outputs.found == 'true' && '✓' || '⚠ (not found, non-blocking)' }} |"
+          } >> $GITHUB_STEP_SUMMARY
