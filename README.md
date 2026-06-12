@@ -20,7 +20,7 @@ The pipeline is triggered by commits to `src/` and includes two key workflows:
 ### Prerequisites
 - A GitHub repository with Actions enabled
 - Cascade CLI v0.1.0 or later (see [stablekernel/cascade](https://github.com/stablekernel/cascade))
-- For state persistence: a GitHub token with `contents:write` scope (passed via `secrets.CASCADE_STATE_TOKEN`)
+- For state persistence: a GitHub token with `contents:write` scope (passed via `secrets.CASCADE_STATE_TEST_TOKEN`)
 
 ### Setup
 
@@ -28,7 +28,7 @@ The scaffold is ready to use after cloning:
 
 1. **Review the manifest**: `.github/manifest.yaml` defines environments, builds, and state tracking
 2. **Customize workflows**: Modify build steps in `.github/workflows/build-*.yaml` to match your application
-3. **Set the state token**: Add a personal access token or fine-grained token to `Settings → Secrets and variables → Actions → New repository secret` as `CASCADE_STATE_TOKEN` (if you want state commits to appear under a specific user, else leave empty for `github-actions[bot]`)
+3. **Set the state token**: Add a personal access token or fine-grained token to `Settings → Secrets and variables → Actions → New repository secret` as `CASCADE_STATE_TEST_TOKEN` (if you want state commits to appear under a specific user, else leave empty for `github-actions[bot]`)
 
 ### Triggering Pipelines
 

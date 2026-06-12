@@ -7,7 +7,7 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  CASCADE_STATE_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+  CASCADE_STATE_TEST_TOKEN: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
 
 jobs:
   reset:
