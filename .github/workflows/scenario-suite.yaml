@@ -70,7 +70,7 @@ jobs:
           RUN_ID=""
 
           # Wait for orchestrate run to appear
-          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
             RUN_ID=$(gh run list \
               --workflow=orchestrate.yaml \
               --branch=main \
@@ -85,8 +85,8 @@ jobs:
             fi
 
             ATTEMPT=$((ATTEMPT + 1))
-            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-              sleep $SLEEP_DURATION
+            if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+              sleep "$SLEEP_DURATION"
             fi
           done
 
@@ -95,7 +95,7 @@ jobs:
             exit 1
           fi
 
-          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
       - name: Assert orchestrate job matrix (both architectures)
         run: |
@@ -185,7 +185,7 @@ jobs:
             echo "| Staging version (semver) | ✓ |"
             echo "| Staging builds image digest | ✓ |"
             echo "| GitHub release created | ✓ |"
-          } >> $GITHUB_STEP_SUMMARY
+          } >> "$GITHUB_STEP_SUMMARY"
 
   promote-staging:
     name: Promote staging to prod
@@ -214,7 +214,7 @@ jobs:
           RUN_ID=""
 
           # Wait for promote run to appear and complete
-          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
             RUN_ID=$(gh run list \
               --workflow=promote.yaml \
               --branch=main \
@@ -229,8 +229,8 @@ jobs:
             fi
 
             ATTEMPT=$((ATTEMPT + 1))
-            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-              sleep $SLEEP_DURATION
+            if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+              sleep "$SLEEP_DURATION"
             fi
           done
 
@@ -239,7 +239,7 @@ jobs:
             exit 1
           fi
 
-          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
       - name: Assert manifest state shape (prod populated)
         run: |
@@ -291,7 +291,7 @@ jobs:
             echo "| Promote run completed | ✓ |"
             echo "| Prod version (semver) | ✓ |"
             echo "| Release published (not RC) | ✓ |"
-          } >> $GITHUB_STEP_SUMMARY
+          } >> "$GITHUB_STEP_SUMMARY"
 
   dispatch-inputs-check:
     name: Dispatch with custom inputs
@@ -321,7 +321,7 @@ jobs:
           RUN_ID=""
 
           # Wait for the newly dispatched run to appear (may not complete immediately)
-          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
             RUN_ID=$(gh run list \
               --workflow=orchestrate.yaml \
               --branch=main \
@@ -335,8 +335,8 @@ jobs:
             fi
 
             ATTEMPT=$((ATTEMPT + 1))
-            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-              sleep $SLEEP_DURATION
+            if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+              sleep "$SLEEP_DURATION"
             fi
           done
 
@@ -345,7 +345,7 @@ jobs:
             exit 1
           fi
 
-          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
       - name: Assert dispatched run was created
         run: |
@@ -368,7 +368,7 @@ jobs:
             echo "|-----------|--------|"
             echo "| Orchestrate run dispatched | ✓ |"
             echo "| Run appeared in GitHub API | ✓ |"
-          } >> $GITHUB_STEP_SUMMARY
+          } >> "$GITHUB_STEP_SUMMARY"
 
   pr-preview-check:
     name: PR preview comment validation (non-blocking)
@@ -398,7 +398,7 @@ jobs:
           git commit -m "test: dummy change for preview check [skip ci]"
           git push origin "$BRANCH_NAME"
 
-          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create test PR
         id: create_pr
@@ -410,8 +410,8 @@ jobs:
             --base main)
 
           PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
 
       - name: Wait for cascade-pr-preview workflow to complete
         id: wait_preview
@@ -421,7 +421,7 @@ jobs:
           ATTEMPT=0
           FOUND=false
 
-          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
             # Try to find a completed cascade-pr-preview run for this commit
             RUN_COUNT=$(gh run list \
               --workflow=cascade-pr-preview.yaml \
@@ -435,16 +435,16 @@ jobs:
             fi
 
             ATTEMPT=$((ATTEMPT + 1))
-            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-              sleep $SLEEP_DURATION
+            if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+              sleep "$SLEEP_DURATION"
             fi
           done
 
           if [ "$FOUND" = "true" ]; then
-            echo "found=true" >> $GITHUB_OUTPUT
+            echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::cascade-pr-preview.yaml run did not complete in time (non-blocking)"
-            echo "found=false" >> $GITHUB_OUTPUT
+            echo "found=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check for preview comment in PR
@@ -472,7 +472,7 @@ jobs:
             echo "::warning::Preview comment not found in PR #$PR_NUMBER (non-blocking)"
           fi
 
-          echo "found=$COMMENT_FOUND" >> $GITHUB_OUTPUT
+          echo "found=$COMMENT_FOUND" >> "$GITHUB_OUTPUT"
 
       - name: Clean up test PR
         if: always()
@@ -499,4 +499,4 @@ jobs:
             echo "| Test PR created | ✓ |"
             echo "| cascade-pr-preview workflow triggered | ${{ steps.wait_preview.outputs.found == 'true' && '✓' || '⚠ (timeout, non-blocking)' }} |"
             echo "| Preview comment found | ${{ steps.check_comment.outputs.found == 'true' && '✓' || '⚠ (not found, non-blocking)' }} |"
-          } >> $GITHUB_STEP_SUMMARY
+          } >> "$GITHUB_STEP_SUMMARY"
