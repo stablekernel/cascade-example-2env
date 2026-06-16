@@ -5,6 +5,11 @@ on:
   schedule:
     - cron: '0 6 * * 1'  # Weekly Monday 6am UTC
 
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   CASCADE_STATE_TEST_TOKEN: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
@@ -17,16 +22,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
 
       - name: Configure Git
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
+          git config user.name "scenario-suite"
+          git config user.email "scenario-suite@users.noreply.github.com"
 
       - name: Reset manifest state
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
         run: |
-          # Reset .github/manifest.yaml config.state to {}
+          # Reset .github/manifest.yaml config.state to {}.
+          # Touches the manifest only (not src/**), so it does not match
+          # orchestrate's path filter and correctly does not fire orchestrate.
           yq eval '.config.state = {}' -i .github/manifest.yaml
           git add .github/manifest.yaml
           git commit -m "chore: reset state for scenario test [skip ci]"
@@ -45,42 +54,70 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
           ref: main
 
       - name: Configure Git
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
+          git config user.name "scenario-suite"
+          git config user.email "scenario-suite@users.noreply.github.com"
 
-      - name: Create and commit dummy src change
+      - name: Open and merge PR with src change
+        id: seed
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
         run: |
+          set -euo pipefail
+
+          # Emulate a real user: land the src change through branch -> PR ->
+          # squash-merge, authored by the PAT so the merge push fires orchestrate.
+          BRANCH="scenario/src-$(date +%s)-$RANDOM"
+          git fetch origin main --quiet
+          git checkout -B "$BRANCH" origin/main
+
           mkdir -p src
           echo "timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > src/version.txt
           git add src/version.txt
-          git commit -m "test: dummy src change for scenario test [skip ci]"
-          git push origin main
+
+          # The squashed commit subject is the PR title, so the conventional
+          # type must live there. No [skip ci]/[ci skip] anywhere, or GitHub
+          # cancels the orchestrate trigger.
+          git commit -m "feat: dummy src change for scenario test"
+          git push origin "$BRANCH"
+
+          gh pr create --base main --head "$BRANCH" \
+            --title "feat: dummy src change for scenario test" \
+            --body "Automated scenario run; drives orchestrate on merge."
+          gh pr merge "$BRANCH" --squash --delete-branch
+
+          # Capture the merge SHA on trunk; it keys the orchestrate wait.
+          git fetch origin main --quiet
+          MERGE_SHA="$(git rev-parse origin/main)"
+          echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Wait for orchestrate.yaml workflow to complete
         id: wait_orchestrate
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
         run: |
+          set -euo pipefail
+          MERGE_SHA="${{ steps.seed.outputs.merge_sha }}"
           MAX_ATTEMPTS=30
           SLEEP_DURATION=10
           ATTEMPT=0
           RUN_ID=""
 
-          # Wait for orchestrate run to appear
+          # Wait for the orchestrate run whose headSha is THIS merge commit,
+          # never a stale "latest" run.
           while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
             RUN_ID=$(gh run list \
               --workflow=orchestrate.yaml \
               --branch=main \
-              --status=completed \
-              --limit=1 \
-              --json=databaseId \
-              --jq='.[0].databaseId // empty' 2>/dev/null || echo "")
+              --json=databaseId,headSha \
+              --jq=".[] | select(.headSha==\"$MERGE_SHA\") | .databaseId" 2>/dev/null | head -n1 || echo "")
 
             if [ -n "$RUN_ID" ]; then
-              echo "Found completed orchestrate run: $RUN_ID"
+              echo "Found orchestrate run for $MERGE_SHA: $RUN_ID"
               break
             fi
 
@@ -91,9 +128,11 @@ jobs:
           done
 
           if [ -z "$RUN_ID" ]; then
-            echo "::error::orchestrate.yaml run did not complete within timeout"
+            echo "::error::orchestrate.yaml run for $MERGE_SHA did not appear within timeout"
             exit 1
           fi
+
+          gh run watch "$RUN_ID" --exit-status
 
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
