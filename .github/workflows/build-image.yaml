@@ -1,0 +1,51 @@
+name: build-image
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: false
+        type: string
+      sha:
+        required: false
+        type: string
+      version:
+        required: false
+        type: string
+      target_env:
+        required: false
+        type: string
+    outputs:
+      artifact_id:
+        description: Identifier of the produced image artifact
+        value: ${{ jobs.run.outputs.artifact_id }}
+      image_digest:
+        description: Digest of the produced image, surfaced as a state tag
+        value: ${{ jobs.run.outputs.image_digest }}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        os: [linux]
+        arch: [amd64, arm64]
+    outputs:
+      artifact_id: ${{ steps.build.outputs.artifact_id }}
+      image_digest: ${{ steps.build.outputs.image_digest }}
+    steps:
+      - name: Stub build-image
+        id: build
+        run: |
+          echo "build-image leg=${{ matrix.os }}-${{ matrix.arch }} environment=${{ inputs.environment }} sha=${{ inputs.sha }} version=${{ inputs.version }}"
+          mkdir -p dist
+          echo "${{ matrix.os }}-${{ matrix.arch }} ${{ inputs.sha }}" > "dist/image-${{ matrix.os }}-${{ matrix.arch }}.txt"
+          DIGEST="sha256:$(echo -n "${{ matrix.os }}-${{ matrix.arch }}-${{ inputs.sha }}" | shasum -a 256 | cut -d' ' -f1)"
+          echo "artifact_id=image-${{ matrix.os }}-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+          echo "image_digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          sleep 1
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/**

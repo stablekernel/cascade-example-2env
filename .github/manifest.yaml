@@ -1,0 +1,50 @@
+ci:
+  config:
+    schema_version: 1
+    trunk_branch: main
+    cli_version: v0.1.0
+    state_token: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
+    manifest_file: .github/manifest.yaml
+    manifest_key: ci
+    environments: [staging, prod]
+    triggers: [src/**]
+    dispatch_inputs:
+      reason:
+        type: string
+        description: "Operator note for this manual run"
+        required: false
+      force:
+        type: boolean
+        default: false
+        description: "Force re-promote"
+    environment_config:
+      prod:
+        gha_environment: prod
+    pr_preview:
+      enabled: true
+      comment: true
+    builds:
+      - name: image
+        workflow: .github/workflows/build-image.yaml
+        triggers: []
+        state_tags: [image_digest]
+        matrix:
+          dimensions:
+            os: [linux]
+            arch: [amd64, arm64]
+          max_parallel: 2
+          fail_fast: false
+        artifact:
+          upload: dist/**
+      - name: bundle
+        workflow: .github/workflows/build-bundle.yaml
+        triggers: []
+        artifact:
+          downloads: [image]
+    deploys:
+      - name: app
+        workflow: .github/workflows/deploy-app.yaml
+        triggers: []
+    publish:
+      workflow: .github/workflows/publish.yaml
+  state: {}

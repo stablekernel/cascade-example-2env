@@ -1,0 +1,38 @@
+name: build-bundle
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: false
+        type: string
+      sha:
+        required: false
+        type: string
+      version:
+        required: false
+        type: string
+      target_env:
+        required: false
+        type: string
+    outputs:
+      artifact_id:
+        description: Identifier of the produced bundle artifact
+        value: ${{ jobs.run.outputs.artifact_id }}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_id: ${{ steps.build.outputs.artifact_id }}
+    steps:
+      - name: Download image artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: image-*
+          path: dist
+      - name: Stub build-bundle
+        id: build
+        run: |
+          echo "build-bundle environment=${{ inputs.environment }} sha=${{ inputs.sha }} version=${{ inputs.version }}"
+          ls -R dist || true
+          echo "artifact_id=bundle-${{ inputs.sha }}" >> "$GITHUB_OUTPUT"
+          sleep 1
