@@ -164,9 +164,20 @@ jobs:
 
           echo "✓ Matrix matrix legs present: linux-amd64, linux-arm64"
 
+      - name: Refresh manifest from trunk
+        run: |
+          # Orchestrate's finalize job pushes the state update as a separate
+          # "chore: update state" commit on main. The checkout above predates
+          # that commit, so sync the local manifest to origin/main before
+          # reading it back. Without this the assertions race the state push.
+          git fetch origin main --quiet
+          git reset --hard origin/main
+
       - name: Assert manifest state shape (staging populated)
         run: |
-          # Read manifest and assert staging version exists and matches semver
+          # Read manifest and assert staging version exists and matches semver.
+          # In a [staging, prod] repo, staging is the first env, so orchestrate
+          # deploys to it and commits state.staging on merge.
           STAGING_VERSION=$(yq eval '.ci.state.staging.version // ""' .github/manifest.yaml)
 
           if [ -z "$STAGING_VERSION" ]; then
@@ -182,15 +193,19 @@ jobs:
 
           echo "✓ Staging version matches semver: $STAGING_VERSION"
 
-      - name: Assert manifest state shape (staging builds image digest)
+      - name: Assert manifest state shape (staging image build recorded)
         run: |
-          # Assert the key exists (value can be anything)
-          yq eval '.ci.state.staging.builds.image.tags.image_digest' .github/manifest.yaml > /dev/null 2>&1 || {
-            echo "::error::.ci.state.staging.builds.image.tags.image_digest key does not exist"
-            exit 1
-          }
+          # Orchestrate records the image build under
+          # state.staging.builds.image.artifact_id (and .sha). Assert the
+          # artifact_id is present and non-empty.
+          ARTIFACT_ID=$(yq eval '.ci.state.staging.builds.image.artifact_id // ""' .github/manifest.yaml)
 
-          echo "✓ Staging builds image digest key exists"
+          if [ -z "$ARTIFACT_ID" ]; then
+            echo "::error::.ci.state.staging.builds.image.artifact_id is empty or missing"
+            exit 1
+          fi
+
+          echo "✓ Staging image build recorded: artifact_id=$ARTIFACT_ID"
 
       - name: Assert GitHub release created
         run: |
@@ -231,7 +246,7 @@ jobs:
             echo "| Orchestrate run completed | ✓ |"
             echo "| Matrix legs (amd64, arm64) | ✓ |"
             echo "| Staging version (semver) | ✓ |"
-            echo "| Staging builds image digest | ✓ |"
+            echo "| Staging image build recorded | ✓ |"
             echo "| GitHub release created | ✓ |"
           } >> "$GITHUB_STEP_SUMMARY"
 
