@@ -212,22 +212,22 @@ jobs:
           # Wait briefly for release to appear and stabilize
           sleep 5
 
-          RELEASE_COUNT=$(gh release list --limit=1 | wc -l)
+          RELEASE_COUNT=$(gh release list --json tagName,isPrerelease,isDraft --jq 'length')
 
-          if [ "$RELEASE_COUNT" -lt 2 ]; then
+          if [ "$RELEASE_COUNT" -lt 1 ]; then
             echo "::error::No GitHub release found"
             exit 1
           fi
 
-          # Check that at least one release exists and is prerelease
-          RELEASE_TAG=$(gh release list --limit=1 | tail -1 | awk '{print $1}')
+          # Get the most recent release tag via JSON output
+          RELEASE_TAG=$(gh release list --json tagName,isPrerelease,isDraft --jq '.[0].tagName')
 
           if ! echo "$RELEASE_TAG" | grep -qE 'v?[0-9]+\.[0-9]+\.[0-9]+'; then
             echo "::error::Release tag does not match semver: $RELEASE_TAG"
             exit 1
           fi
 
-          IS_PRERELEASE=$(gh release view "$RELEASE_TAG" --json=isPrerelease --jq='.isPrerelease')
+          IS_PRERELEASE=$(gh release view "$RELEASE_TAG" --json isPrerelease --jq '.isPrerelease')
 
           if [ "$IS_PRERELEASE" != "true" ]; then
             echo "::warning::Release is not marked as prerelease"
