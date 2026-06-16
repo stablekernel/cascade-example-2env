@@ -1,0 +1,22 @@
+name: publish
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: false
+        type: string
+      sha:
+        required: false
+        type: string
+      version:
+        required: false
+        type: string
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stub publish
+        run: |
+          echo "publish retag environment=${{ inputs.environment }} sha=${{ inputs.sha }} version=${{ inputs.version }}"
+          echo "retagging RC artifacts to released version ${{ inputs.version }}"
+          sleep 1
