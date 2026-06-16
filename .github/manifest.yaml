@@ -67,22 +67,22 @@ ci:
           committed_at: "2026-06-16T22:02:46Z"
           committed_by: github-actions[bot]
     staging:
-      sha: 26a62552fc15983c4ecf78160933f7784f67d4df
-      version: v0.1.0-rc.2
-      committed_at: "2026-06-16T23:04:18Z"
-      committed_by: github-actions[bot]
+      sha: f5ca3340a00cb0a7dae6396f51690117a7a01869
+      version: v0.1.0-rc.3
+      committed_at: "2026-06-16T23:53:11Z"
+      committed_by: joshua-temple
       builds:
         bundle:
-          sha: 26a62552fc15983c4ecf78160933f7784f67d4df
-          artifact_id: bundle-26a62552fc15983c4ecf78160933f7784f67d4df
+          sha: f5ca3340a00cb0a7dae6396f51690117a7a01869
+          artifact_id: bundle-f5ca3340a00cb0a7dae6396f51690117a7a01869
         image:
-          sha: 26a62552fc15983c4ecf78160933f7784f67d4df
+          sha: f5ca3340a00cb0a7dae6396f51690117a7a01869
           artifact_id: image-linux-arm64
       deploys:
         app:
-          sha: 26a62552fc15983c4ecf78160933f7784f67d4df
-          deployed_at: "2026-06-16T23:04:18Z"
-          deployed_by: github-actions[bot]
+          sha: f5ca3340a00cb0a7dae6396f51690117a7a01869
+          deployed_at: "2026-06-16T23:53:11Z"
+          deployed_by: joshua-temple
   latest_release:
     version: v0.1.0
     sha: 2a87e59954d68fc6b0375c96879657ffbc0df602
