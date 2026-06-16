@@ -47,6 +47,23 @@ ci:
         triggers: []
     publish:
       workflow: .github/workflows/publish.yaml
-  state: {}
+  state:
+    staging:
+      sha: 67f4b019702e9be449cbbab61126e5b216b36dc8
+      version: v0.1.0-rc.0
+      committed_at: "2026-06-16T22:01:23Z"
+      committed_by: joshua-temple
+      deploys:
+        app:
+          sha: 67f4b019702e9be449cbbab61126e5b216b36dc8
+          deployed_at: "2026-06-16T22:01:23Z"
+          deployed_by: joshua-temple
+      builds:
+        image:
+          sha: 67f4b019702e9be449cbbab61126e5b216b36dc8
+          artifact_id: image-linux-amd64
+        bundle:
+          sha: 67f4b019702e9be449cbbab61126e5b216b36dc8
+          artifact_id: bundle-67f4b019702e9be449cbbab61126e5b216b36dc8
 config:
   state: {}
