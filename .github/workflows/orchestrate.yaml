@@ -95,6 +95,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Collect matrix leg artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: image-*
+          path: dist
+          merge-multiple: true
       - name: Upload artifact build-image
         uses: actions/upload-artifact@v4
         with:
