@@ -48,3 +48,5 @@ ci:
     publish:
       workflow: .github/workflows/publish.yaml
   state: {}
+config:
+  state: {}
