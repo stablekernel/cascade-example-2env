@@ -304,24 +304,29 @@ jobs:
 
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Assert manifest state shape (prod populated)
+      - name: Assert manifest state shape (release marker populated)
         run: |
           # Refresh manifest from latest
           git pull origin main
 
-          PROD_VERSION=$(yq eval '.ci.state.prod.version // ""' .github/manifest.yaml)
+          # A terminal promotion publishes the release and records the version
+          # under the .ci.state.release marker (the published-version marker),
+          # not under a per-environment deploy slot. The final env emits no
+          # deploy jobs, so .ci.state.prod stays empty by design; assert the
+          # release marker carries the published semver instead.
+          RELEASE_VERSION=$(yq eval '.ci.state.release.version // ""' .github/manifest.yaml)
 
-          if [ -z "$PROD_VERSION" ]; then
-            echo "::error::.ci.state.prod.version is empty or missing"
+          if [ -z "$RELEASE_VERSION" ]; then
+            echo "::error::.ci.state.release.version is empty or missing"
             exit 1
           fi
 
-          if ! echo "$PROD_VERSION" | grep -qE 'v?[0-9]+\.[0-9]+\.[0-9]+'; then
-            echo "::error::.ci.state.prod.version does not match semver pattern: $PROD_VERSION"
+          if ! echo "$RELEASE_VERSION" | grep -qE 'v?[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::.ci.state.release.version does not match semver pattern: $RELEASE_VERSION"
             exit 1
           fi
 
-          echo "✓ Prod version matches semver: $PROD_VERSION"
+          echo "✓ Release version matches semver: $RELEASE_VERSION"
 
       - name: Assert GitHub release is published (not RC)
         run: |
