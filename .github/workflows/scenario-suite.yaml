@@ -306,15 +306,25 @@ jobs:
 
       - name: Assert manifest state shape (release marker populated)
         run: |
-          # Refresh manifest from latest
-          git pull origin main
-
           # A terminal promotion publishes the release and records the version
           # under the .ci.state.release marker (the published-version marker),
           # not under a per-environment deploy slot. The final env emits no
           # deploy jobs, so .ci.state.prod stays empty by design; assert the
           # release marker carries the published semver instead.
-          RELEASE_VERSION=$(yq eval '.ci.state.release.version // ""' .github/manifest.yaml)
+          #
+          # finalize pushes its state commit shortly after the promote run
+          # reports completed, so the wait above can return before the release
+          # marker lands on main. Poll-pull until the marker is present.
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          RELEASE_VERSION=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            git pull origin main --quiet || true
+            RELEASE_VERSION=$(yq eval '.ci.state.release.version // ""' .github/manifest.yaml)
+            [ -n "$RELEASE_VERSION" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 5
+          done
 
           if [ -z "$RELEASE_VERSION" ]; then
             echo "::error::.ci.state.release.version is empty or missing"
