@@ -24,9 +24,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v1.0.0-rc.15
+        uses: stablekernel/cascade/.github/actions/setup-cli@v1.0.0-rc.16
         with:
-          version: v1.0.0-rc.15
+          version: v1.0.0-rc.16
 
       - name: Validate manifest
         run: |
@@ -51,6 +51,7 @@ jobs:
           # so no release is cut, no state is written, and no deploy is triggered.
           cascade --dry-run orchestrate setup \
             --config .github/manifest.yaml \
+            --environment staging \
             --sha "$HEAD_SHA" \
             > cascade-plan.json
 
