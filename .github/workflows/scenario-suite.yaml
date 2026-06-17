@@ -111,8 +111,8 @@ jobs:
         run: |
           set -euo pipefail
           MERGE_SHA="${{ steps.seed.outputs.merge_sha }}"
-          MAX_ATTEMPTS=30
-          SLEEP_DURATION=10
+          MAX_ATTEMPTS=5
+          SLEEP_DURATION=60
           ATTEMPT=0
           RUN_ID=""
 
@@ -141,7 +141,7 @@ jobs:
             exit 1
           fi
 
-          gh run watch "$RUN_ID" --exit-status
+          gh run watch "$RUN_ID" --exit-status --interval 60
 
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
@@ -231,7 +231,7 @@ jobs:
           # so at this stage the correct invariant is a draft RC, not a
           # prerelease. Poll trunk's release list until the draft RC lands rather
           # than reading once, so the assertion never races the Finalize commit.
-          MAX_ATTEMPTS=12
+          MAX_ATTEMPTS=2
           ATTEMPT=0
           RELEASE_TAG=""
           IS_DRAFT=""
@@ -246,7 +246,7 @@ jobs:
               fi
             fi
             ATTEMPT=$((ATTEMPT + 1))
-            sleep 5
+            sleep 60
           done
 
           if [ -z "$RELEASE_TAG" ]; then
@@ -307,8 +307,8 @@ jobs:
         id: wait_promote
         run: |
           TS="${{ steps.dispatch_promote.outputs.dispatch_ts }}"
-          MAX_ATTEMPTS=20
-          SLEEP_DURATION=10
+          MAX_ATTEMPTS=4
+          SLEEP_DURATION=60
           ATTEMPT=0
           RUN_ID=""
 
@@ -339,7 +339,7 @@ jobs:
           fi
 
           # Block on THIS run and require a successful conclusion.
-          gh run watch "$RUN_ID" --exit-status
+          gh run watch "$RUN_ID" --exit-status --interval 60
 
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
@@ -354,7 +354,7 @@ jobs:
           # finalize pushes its state commit shortly after the promote run
           # reports completed, so the wait above can return before the release
           # marker lands on main. Poll-pull until the marker is present.
-          MAX_ATTEMPTS=30
+          MAX_ATTEMPTS=3
           ATTEMPT=0
           RELEASE_VERSION=""
           while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
@@ -362,7 +362,7 @@ jobs:
             RELEASE_VERSION=$(yq eval '.ci.state.release.version // ""' .github/manifest.yaml)
             [ -n "$RELEASE_VERSION" ] && break
             ATTEMPT=$((ATTEMPT + 1))
-            sleep 5
+            sleep 60
           done
 
           if [ -z "$RELEASE_VERSION" ]; then
@@ -453,8 +453,8 @@ jobs:
         run: |
           set -euo pipefail
           TS="${{ steps.dispatch_inputs.outputs.dispatch_ts }}"
-          MAX_ATTEMPTS=30
-          SLEEP_DURATION=10
+          MAX_ATTEMPTS=5
+          SLEEP_DURATION=60
           ATTEMPT=0
           RUN_ID=""
 
@@ -485,7 +485,7 @@ jobs:
           fi
 
           # Block on THIS run; a failed orchestrate means the input never reached state.
-          gh run watch "$RUN_ID" --exit-status
+          gh run watch "$RUN_ID" --exit-status --interval 60
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
       - name: Assert dispatched reason reached consolidated state
@@ -500,7 +500,7 @@ jobs:
           # consolidated artifact_id equals the exact dispatched value. This proves
           # the operator input TOOK EFFECT (input -> callback -> state), not merely
           # that a run existed.
-          MAX_ATTEMPTS=30
+          MAX_ATTEMPTS=3
           ATTEMPT=0
           ACTUAL=""
           while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
@@ -508,7 +508,7 @@ jobs:
             ACTUAL=$(yq eval '.ci.state.staging.builds.bundle.artifact_id // ""' .github/manifest.yaml)
             [ "$ACTUAL" = "$EXPECTED" ] && break
             ATTEMPT=$((ATTEMPT + 1))
-            sleep 5
+            sleep 60
           done
 
           if [ "$ACTUAL" != "$EXPECTED" ]; then
@@ -592,8 +592,8 @@ jobs:
         run: |
           set -euo pipefail
           HEAD_SHA="${{ steps.branch.outputs.head_sha }}"
-          MAX_ATTEMPTS=30
-          SLEEP_DURATION=10
+          MAX_ATTEMPTS=5
+          SLEEP_DURATION=60
           ATTEMPT=0
           RUN_ID=""
 
@@ -621,7 +621,7 @@ jobs:
           fi
 
           # Hard fail unless the preview run concludes success.
-          gh run watch "$RUN_ID" --exit-status
+          gh run watch "$RUN_ID" --exit-status --interval 60
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
       - name: Assert preview comment was posted (hard fail)
@@ -637,7 +637,7 @@ jobs:
           # exact marker exists. The comment can lag the run conclusion slightly,
           # so poll briefly.
           MARKER='<!-- cascade-pr-preview -->'
-          MAX_ATTEMPTS=12
+          MAX_ATTEMPTS=2
           ATTEMPT=0
           FOUND=""
           while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
@@ -646,7 +646,7 @@ jobs:
               2>/dev/null || echo 0)
             [ "${FOUND:-0}" -gt 0 ] && break
             ATTEMPT=$((ATTEMPT + 1))
-            sleep 5
+            sleep 60
           done
 
           if [ "${FOUND:-0}" -lt 1 ]; then
