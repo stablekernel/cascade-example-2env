@@ -145,24 +145,30 @@ jobs:
 
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Assert orchestrate job matrix (both architectures)
+      - name: Assert per-leg matrix artifacts exist (artifacts API)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           RUN_ID="${{ steps.wait_orchestrate.outputs.run_id }}"
 
-          # Fetch run logs and check for both linux-amd64 and linux-arm64
-          gh run view "$RUN_ID" --log > /tmp/orchestrate.log 2>&1 || true
+          # Each build-image matrix leg uploads an artifact whose name carries the
+          # os-arch dimension (build-image.yaml: name=image-${os}-${arch}). The
+          # artifacts API is the deterministic per-leg signal: assert BOTH leg
+          # names are present on this exact run, keyed by artifact name (not logs).
+          ARTIFACTS=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" \
+            --jq '.artifacts[].name')
+          echo "Run $RUN_ID artifacts:"
+          echo "$ARTIFACTS"
 
-          if ! grep -q "linux-amd64" /tmp/orchestrate.log; then
-            echo "::error::linux-amd64 matrix leg not found in orchestrate logs"
-            exit 1
-          fi
+          for LEG in image-linux-amd64 image-linux-arm64; do
+            if ! echo "$ARTIFACTS" | grep -qx "$LEG"; then
+              echo "::error::matrix leg artifact '$LEG' missing from run $RUN_ID"
+              exit 1
+            fi
+          done
 
-          if ! grep -q "linux-arm64" /tmp/orchestrate.log; then
-            echo "::error::linux-arm64 matrix leg not found in orchestrate logs"
-            exit 1
-          fi
-
-          echo "✓ Matrix matrix legs present: linux-amd64, linux-arm64"
+          echo "✓ Per-leg matrix artifacts present: image-linux-amd64, image-linux-arm64"
 
       - name: Refresh manifest from trunk
         run: |
@@ -193,11 +199,12 @@ jobs:
 
           echo "✓ Staging version matches semver: $STAGING_VERSION"
 
-      - name: Assert manifest state shape (staging image build recorded)
+      - name: Assert manifest state shape (consolidated image build recorded)
         run: |
-          # Orchestrate records the image build under
-          # state.staging.builds.image.artifact_id (and .sha). Assert the
-          # artifact_id is present and non-empty.
+          # Orchestrate consolidates the matrix build into a single
+          # state.staging.builds.image.artifact_id slot (there is no per-leg state
+          # slot). Assert it carries the known consolidated shape image-linux-*
+          # produced by the build-image legs, not merely a non-empty value.
           ARTIFACT_ID=$(yq eval '.ci.state.staging.builds.image.artifact_id // ""' .github/manifest.yaml)
 
           if [ -z "$ARTIFACT_ID" ]; then
@@ -205,7 +212,15 @@ jobs:
             exit 1
           fi
 
-          echo "✓ Staging image build recorded: artifact_id=$ARTIFACT_ID"
+          case "$ARTIFACT_ID" in
+            image-linux-*) ;;
+            *)
+              echo "::error::consolidated image artifact_id has unexpected shape: $ARTIFACT_ID (want image-linux-*)"
+              exit 1
+              ;;
+          esac
+
+          echo "✓ Consolidated image build recorded: artifact_id=$ARTIFACT_ID"
 
       - name: Assert GitHub release created
         run: |
@@ -245,9 +260,9 @@ jobs:
             echo "| Assertion | Result |"
             echo "|-----------|--------|"
             echo "| Orchestrate run completed | ✓ |"
-            echo "| Matrix legs (amd64, arm64) | ✓ |"
+            echo "| Per-leg matrix artifacts (amd64, arm64) | ✓ |"
             echo "| Staging version (semver) | ✓ |"
-            echo "| Staging image build recorded | ✓ |"
+            echo "| Consolidated image build recorded | ✓ |"
             echo "| GitHub release created | ✓ |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -381,50 +396,65 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   dispatch-inputs-check:
-    name: Dispatch with custom inputs
+    name: Dispatch input takes effect
     runs-on: ubuntu-latest
     needs: promote-staging
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
           ref: main
 
-      - name: Dispatch orchestrate.yaml with custom inputs
+      - name: Dispatch orchestrate.yaml with a distinctive reason
         id: dispatch_inputs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Stamp the dispatch time so the wait below can correlate the run it
+          set -euo pipefail
+          # The reason flows operator -> orchestrate -> build-bundle callback ->
+          # consolidated state. cascade forwards `reason` to build-bundle because
+          # that callback declares a matching `reason` input; the stub echoes it
+          # into artifact_id (bundle-<reason>). Use a unique, identifier-safe
+          # sentinel so the exact value is knowable downstream.
+          REASON="dispatch-sentinel-${GITHUB_RUN_ID}-${RANDOM}"
+          echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+          echo "expected_artifact_id=bundle-$REASON" >> "$GITHUB_OUTPUT"
+
+          # Stamp the dispatch time so the wait below correlates the run it
           # created, never an older orchestrate run that happens to be newest.
           TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "dispatch_ts=$TS" >> "$GITHUB_OUTPUT"
           gh workflow run orchestrate.yaml \
-            -f reason='manual gate test' \
+            -f environment=staging \
+            -f reason="$REASON" \
             -f force=true \
             --ref main
 
-      - name: Wait for dispatched run to appear
+      - name: Wait for dispatched orchestrate run to complete
         id: wait_dispatch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           TS="${{ steps.dispatch_inputs.outputs.dispatch_ts }}"
-          MAX_ATTEMPTS=10
-          SLEEP_DURATION=5
+          MAX_ATTEMPTS=30
+          SLEEP_DURATION=10
           ATTEMPT=0
           RUN_ID=""
 
-          # Wait for the run created at or after our dispatch timestamp to appear
-          # (it may not complete immediately; this job only asserts creation).
           while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
             RUN_ID=$(gh run list \
               --workflow=orchestrate.yaml \
               --branch=main \
+              --event=workflow_dispatch \
               --created=">=$TS" \
               --limit=1 \
               --json=databaseId \
               --jq='.[0].databaseId // empty' 2>/dev/null || echo "")
 
             if [ -n "$RUN_ID" ]; then
-              echo "Found orchestrate run for dispatch $TS: $RUN_ID"
+              echo "Found dispatched orchestrate run: $RUN_ID"
               break
             fi
 
@@ -435,22 +465,44 @@ jobs:
           done
 
           if [ -z "$RUN_ID" ]; then
-            echo "::error::Dispatched orchestrate.yaml run for $TS did not appear within timeout"
+            echo "::error::dispatched orchestrate.yaml run for $TS did not appear within timeout"
             exit 1
           fi
 
+          # Block on THIS run; a failed orchestrate means the input never reached state.
+          gh run watch "$RUN_ID" --exit-status
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Assert dispatched run was created
+      - name: Assert dispatched reason reached consolidated state
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
         run: |
-          RUN_ID="${{ steps.wait_dispatch.outputs.run_id }}"
+          set -euo pipefail
+          EXPECTED="${{ steps.dispatch_inputs.outputs.expected_artifact_id }}"
 
-          if [ -z "$RUN_ID" ]; then
-            echo "::error::Run ID is empty"
+          # finalize pushes the state commit shortly after the run reports
+          # completed; poll-pull trunk until the bundle slot lands, then assert the
+          # consolidated artifact_id equals the exact dispatched value. This proves
+          # the operator input TOOK EFFECT (input -> callback -> state), not merely
+          # that a run existed.
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          ACTUAL=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            git pull origin main --quiet || true
+            ACTUAL=$(yq eval '.ci.state.staging.builds.bundle.artifact_id // ""' .github/manifest.yaml)
+            [ "$ACTUAL" = "$EXPECTED" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 5
+          done
+
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::dispatched reason did not reach state.staging.builds.bundle.artifact_id"
+            echo "::error::expected '$EXPECTED', got '$ACTUAL'"
             exit 1
           fi
 
-          echo "✓ Dispatched run created with ID: $RUN_ID"
+          echo "✓ Dispatch input took effect: bundle.artifact_id == $ACTUAL"
 
       - name: Write assertions summary
         if: always()
@@ -460,43 +512,52 @@ jobs:
             echo ""
             echo "| Assertion | Result |"
             echo "|-----------|--------|"
-            echo "| Orchestrate run dispatched | ✓ |"
-            echo "| Run appeared in GitHub API | ✓ |"
+            echo "| Dispatched orchestrate completed | ✓ |"
+            echo "| Reason reached consolidated state (exact value) | ✓ |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   pr-preview-check:
-    name: PR preview comment validation (non-blocking)
+    name: PR preview comment validation
     runs-on: ubuntu-latest
     needs: dispatch-inputs-check
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
           ref: main
 
       - name: Configure Git
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
+          git config user.name "scenario-suite"
+          git config user.email "scenario-suite@users.noreply.github.com"
 
       - name: Create and push test PR branch
         id: branch
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
         run: |
-          BRANCH_NAME="test/cascade-preview-$(date +%s)"
+          set -euo pipefail
+          BRANCH_NAME="test/cascade-preview-$(date +%s)-$RANDOM"
           git checkout -b "$BRANCH_NAME"
 
-          touch PR_TEST_MARKER
-          git add PR_TEST_MARKER
-          git commit --no-gpg-sign -m "test: dummy change for preview check [skip ci]"
+          # Touch src/** so the preview's change detection has a callback to plan.
+          mkdir -p src
+          echo "preview-$(date -u +%s)" > src/preview-marker.txt
+          git add src/preview-marker.txt
+          git commit --no-gpg-sign -m "test: dummy src change for preview check [skip ci]"
           git push origin "$BRANCH_NAME"
 
+          HEAD_SHA="$(git rev-parse HEAD)"
           echo "branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Create test PR
         id: create_pr
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
         run: |
+          set -euo pipefail
           PR_URL=$(gh pr create \
             --title "Test PR for cascade preview" \
             --body "Scenario test PR to validate cascade-pr-preview.yaml functionality." \
@@ -505,26 +566,28 @@ jobs:
 
           PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for cascade-pr-preview workflow to complete
+      - name: Wait for cascade-pr-preview run to succeed
         id: wait_preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          MAX_ATTEMPTS=10
-          SLEEP_DURATION=5
+          set -euo pipefail
+          HEAD_SHA="${{ steps.branch.outputs.head_sha }}"
+          MAX_ATTEMPTS=30
+          SLEEP_DURATION=10
           ATTEMPT=0
-          FOUND=false
+          RUN_ID=""
 
+          # Correlate on THIS PR head SHA, never a stale "latest" preview run.
           while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
-            # Try to find a completed cascade-pr-preview run for this commit
-            RUN_COUNT=$(gh run list \
+            RUN_ID=$(gh run list \
               --workflow=cascade-pr-preview.yaml \
-              --status=completed \
-              --limit=5 \
-              --json=databaseId 2>/dev/null | wc -l)
+              --json=databaseId,headSha \
+              --jq=".[] | select(.headSha==\"$HEAD_SHA\") | .databaseId" 2>/dev/null | head -n1 || echo "")
 
-            if [ "$RUN_COUNT" -gt 0 ]; then
-              FOUND=true
+            if [ -n "$RUN_ID" ]; then
+              echo "Found cascade-pr-preview run for $HEAD_SHA: $RUN_ID"
               break
             fi
 
@@ -534,63 +597,67 @@ jobs:
             fi
           done
 
-          if [ "$FOUND" = "true" ]; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::cascade-pr-preview.yaml run did not complete in time (non-blocking)"
-            echo "found=false" >> "$GITHUB_OUTPUT"
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::cascade-pr-preview.yaml run for $HEAD_SHA did not appear within timeout"
+            exit 1
           fi
 
-      - name: Check for preview comment in PR
-        id: check_comment
-        continue-on-error: true
+          # Hard fail unless the preview run concludes success.
+          gh run watch "$RUN_ID" --exit-status
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Assert preview comment was posted (hard fail)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           PR_NUMBER="${{ steps.create_pr.outputs.pr_number }}"
 
-          # Get PR comments
-          COMMENT_COUNT=$(gh api repos/:owner/:repo/issues/$PR_NUMBER/comments \
-            --jq='length' 2>/dev/null || echo 0)
+          # The preview comment is posted by actions/github-script (authored by
+          # github-actions[bot]); its body's first line is the stable marker
+          # "<!-- cascade-pr-preview -->". Hard-assert a bot comment carrying that
+          # exact marker exists. The comment can lag the run conclusion slightly,
+          # so poll briefly.
+          MARKER='<!-- cascade-pr-preview -->'
+          MAX_ATTEMPTS=12
+          ATTEMPT=0
+          FOUND=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            FOUND=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+              --jq "[.[] | select(.user.login == \"github-actions[bot]\") | select(.body | contains(\"$MARKER\"))] | length" \
+              2>/dev/null || echo 0)
+            [ "${FOUND:-0}" -gt 0 ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 5
+          done
 
-          COMMENT_FOUND=false
-
-          if [ "$COMMENT_COUNT" -gt 0 ]; then
-            # Check if any comment contains "cascade" or "preview"
-            if gh api repos/:owner/:repo/issues/$PR_NUMBER/comments \
-              --jq='.[] | .body' 2>/dev/null | grep -iE 'cascade|preview' > /dev/null; then
-              COMMENT_FOUND=true
-              echo "::notice::Found preview comment in PR #$PR_NUMBER"
-            fi
+          if [ "${FOUND:-0}" -lt 1 ]; then
+            echo "::error::no github-actions[bot] comment containing '$MARKER' on PR #$PR_NUMBER"
+            exit 1
           fi
 
-          if [ "$COMMENT_FOUND" = "false" ]; then
-            echo "::warning::Preview comment not found in PR #$PR_NUMBER (non-blocking)"
-          fi
-
-          echo "found=$COMMENT_FOUND" >> "$GITHUB_OUTPUT"
+          echo "✓ Preview comment posted by github-actions[bot] with marker on PR #$PR_NUMBER"
 
       - name: Clean up test PR
         if: always()
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.create_pr.outputs.pr_number }}"
           BRANCH_NAME="${{ steps.branch.outputs.branch }}"
-
-          # Close PR
           gh pr close "$PR_NUMBER" --delete-branch || true
-
-          # Delete branch if still exists
           git push origin --delete "$BRANCH_NAME" || true
-
           echo "Cleaned up PR #$PR_NUMBER and branch $BRANCH_NAME"
 
       - name: Write assertions summary
         if: always()
         run: |
           {
-            echo "## pr-preview-check Assertions (Non-Blocking)"
+            echo "## pr-preview-check Assertions"
             echo ""
             echo "| Assertion | Result |"
             echo "|-----------|--------|"
             echo "| Test PR created | ✓ |"
-            echo "| cascade-pr-preview workflow triggered | ${{ steps.wait_preview.outputs.found == 'true' && '✓' || '⚠ (timeout, non-blocking)' }} |"
-            echo "| Preview comment found | ${{ steps.check_comment.outputs.found == 'true' && '✓' || '⚠ (not found, non-blocking)' }} |"
+            echo "| cascade-pr-preview run succeeded | ✓ |"
+            echo "| Preview comment posted by github-actions[bot] (marker) | ✓ |"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -130,6 +130,7 @@ jobs:
     with:
       environment: ${{ github.event.inputs.environment || 'staging' }}
       sha: ${{ needs.setup.outputs.head_sha }}
+      reason: ${{ inputs.reason }}
 
   deploy-app:
     name: Deploy (app)
