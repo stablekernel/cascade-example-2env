@@ -557,10 +557,13 @@ jobs:
           git checkout -b "$BRANCH_NAME"
 
           # Touch src/** so the preview's change detection has a callback to plan.
+          # No [skip ci]/[ci skip] in the message: GitHub suppresses workflow runs
+          # for such commits, which would stop cascade-pr-preview from ever firing
+          # on this PR head and make the wait below time out.
           mkdir -p src
           echo "preview-$(date -u +%s)" > src/preview-marker.txt
           git add src/preview-marker.txt
-          git commit --no-gpg-sign -m "test: dummy src change for preview check [skip ci]"
+          git commit --no-gpg-sign -m "test: dummy src change for preview check"
           git push origin "$BRANCH_NAME"
 
           HEAD_SHA="$(git rev-parse HEAD)"
