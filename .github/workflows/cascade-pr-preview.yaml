@@ -24,9 +24,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v1.0.0-rc.20
+        uses: stablekernel/cascade/.github/actions/setup-cli@v1.0.0-rc.21
         with:
-          version: v1.0.0-rc.20
+          version: v1.0.0-rc.21
 
       - name: Validate manifest
         run: |
