@@ -67,22 +67,22 @@ ci:
           committed_at: "2026-06-16T22:02:46Z"
           committed_by: github-actions[bot]
     staging:
-      sha: 67bd9a99abf14e13efb0701086809c5fb88bb292
-      version: v0.1.0-rc.2
-      committed_at: "2026-06-17T04:25:12Z"
-      committed_by: github-actions[bot]
+      sha: c86988596d6a1f7697b91d06975d489d5d30b073
+      version: v0.1.0-rc.3
+      committed_at: "2026-06-17T14:19:41Z"
+      committed_by: joshua-temple
       builds:
         bundle:
-          sha: 67bd9a99abf14e13efb0701086809c5fb88bb292
-          artifact_id: bundle-dispatch-sentinel-27665568176-22296
+          sha: c86988596d6a1f7697b91d06975d489d5d30b073
+          artifact_id: bundle-c86988596d6a1f7697b91d06975d489d5d30b073
         image:
-          sha: 67bd9a99abf14e13efb0701086809c5fb88bb292
-          artifact_id: image-linux-amd64
+          sha: c86988596d6a1f7697b91d06975d489d5d30b073
+          artifact_id: image-linux-arm64
       deploys:
         app:
-          sha: 67bd9a99abf14e13efb0701086809c5fb88bb292
-          deployed_at: "2026-06-17T04:25:12Z"
-          deployed_by: github-actions[bot]
+          sha: c86988596d6a1f7697b91d06975d489d5d30b073
+          deployed_at: "2026-06-17T14:19:41Z"
+          deployed_by: joshua-temple
   latest_release:
     version: v0.1.0
     sha: 2a8bc26fdda6a8c4eca94e501c495a21db1ed89f
