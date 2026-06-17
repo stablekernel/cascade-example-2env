@@ -14,6 +14,9 @@ on:
       target_env:
         required: false
         type: string
+      reason:
+        required: false
+        type: string
     outputs:
       artifact_id:
         description: Identifier of the produced bundle artifact
@@ -31,8 +34,18 @@ jobs:
           path: dist
       - name: Stub build-bundle
         id: build
+        env:
+          REASON: ${{ inputs.reason }}
+          SHA: ${{ inputs.sha }}
         run: |
-          echo "build-bundle environment=${{ inputs.environment }} sha=${{ inputs.sha }} version=${{ inputs.version }}"
+          echo "build-bundle environment=${{ inputs.environment }} sha=$SHA version=${{ inputs.version }} reason=$REASON"
           ls -R dist || true
-          echo "artifact_id=bundle-${{ inputs.sha }}" >> "$GITHUB_OUTPUT"
+          # When an operator dispatches with a reason, surface it verbatim in the
+          # artifact_id so the value flows reason -> callback -> consolidated state.
+          # Falls back to the sha on automatic (push) runs that carry no reason.
+          if [ -n "$REASON" ]; then
+            echo "artifact_id=bundle-${REASON}" >> "$GITHUB_OUTPUT"
+          else
+            echo "artifact_id=bundle-${SHA}" >> "$GITHUB_OUTPUT"
+          fi
           sleep 1
