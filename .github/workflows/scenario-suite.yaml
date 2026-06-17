@@ -224,32 +224,47 @@ jobs:
 
       - name: Assert GitHub release created
         run: |
-          # Wait briefly for release to appear and stabilize
-          sleep 5
+          # The push-triggered orchestrate Finalize calls manage-release with
+          # action=update, which cascade defines as a DRAFT RC release
+          # (draft=true, prerelease=false). The prerelease and published states
+          # are reached later by promote (asserted in the promote-staging job),
+          # so at this stage the correct invariant is a draft RC, not a
+          # prerelease. Poll trunk's release list until the draft RC lands rather
+          # than reading once, so the assertion never races the Finalize commit.
+          MAX_ATTEMPTS=12
+          ATTEMPT=0
+          RELEASE_TAG=""
+          IS_DRAFT=""
+          IS_PRERELEASE=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            RELEASE_TAG=$(gh release list --json tagName,isDraft,isPrerelease --jq '.[0].tagName // ""')
+            if [ -n "$RELEASE_TAG" ]; then
+              IS_DRAFT=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft')
+              IS_PRERELEASE=$(gh release view "$RELEASE_TAG" --json isPrerelease --jq '.isPrerelease')
+              if [ "$IS_DRAFT" = "true" ]; then
+                break
+              fi
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 5
+          done
 
-          RELEASE_COUNT=$(gh release list --json tagName,isPrerelease,isDraft --jq 'length')
-
-          if [ "$RELEASE_COUNT" -lt 1 ]; then
+          if [ -z "$RELEASE_TAG" ]; then
             echo "::error::No GitHub release found"
             exit 1
           fi
-
-          # Get the most recent release tag via JSON output
-          RELEASE_TAG=$(gh release list --json tagName,isPrerelease,isDraft --jq '.[0].tagName')
 
           if ! echo "$RELEASE_TAG" | grep -qE 'v?[0-9]+\.[0-9]+\.[0-9]+'; then
             echo "::error::Release tag does not match semver: $RELEASE_TAG"
             exit 1
           fi
 
-          IS_PRERELEASE=$(gh release view "$RELEASE_TAG" --json isPrerelease --jq '.isPrerelease')
-
-          if [ "$IS_PRERELEASE" != "true" ]; then
-            echo "::error::Release is not marked as prerelease"
+          if [ "$IS_DRAFT" != "true" ]; then
+            echo "::error::Orchestrate RC release is not a draft (draft=$IS_DRAFT, prerelease=$IS_PRERELEASE)"
             exit 1
           fi
 
-          echo "✓ GitHub release created: $RELEASE_TAG (prerelease=$IS_PRERELEASE)"
+          echo "✓ GitHub draft RC release created: $RELEASE_TAG (draft=$IS_DRAFT, prerelease=$IS_PRERELEASE)"
 
       - name: Write assertions summary
         if: always()
