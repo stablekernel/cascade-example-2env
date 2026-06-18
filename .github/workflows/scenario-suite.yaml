@@ -410,10 +410,196 @@ jobs:
             echo "| Release published (not RC) | ✓ |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  rollback-check:
+    name: Rollback staging to prior version
+    runs-on: ubuntu-latest
+    needs: promote-staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+          ref: main
+
+      - name: Configure Git
+        run: |
+          git config user.name "scenario-suite"
+          git config user.email "scenario-suite@users.noreply.github.com"
+
+      - name: Land a second staging version so a prior ring entry exists
+        id: second
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # A rollback can only resolve a prior target once staging has carried two
+          # distinct deploy SHAs: the second deploy records the displaced state in
+          # staging's deploy-history ring. staging is the deployable env in this
+          # [staging, prod] model (prod is the publish boundary and emits no deploy
+          # jobs), so it is the env the manual rollback re-deploys. Land a second
+          # src change through branch -> PR -> squash-merge so orchestrate deploys a
+          # new SHA to staging.
+          git pull origin main --quiet
+          PRIOR_SHA="$(yq eval '.ci.state.staging.sha // ""' .github/manifest.yaml)"
+          echo "prior_sha=$PRIOR_SHA" >> "$GITHUB_OUTPUT"
+
+          BRANCH="scenario/rollback-src-$(date +%s)-$RANDOM"
+          git checkout -B "$BRANCH" origin/main
+          mkdir -p src
+          echo "rollback-marker=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > src/rollback-marker.txt
+          git add src/rollback-marker.txt
+          git commit --no-gpg-sign -m "feat: second staging version for rollback test"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "feat: second staging version for rollback test" \
+            --body "Automated scenario run; drives orchestrate on merge."
+          gh pr merge "$BRANCH" --squash --delete-branch
+          git fetch origin main --quiet
+          MERGE_SHA="$(git rev-parse origin/main)"
+          echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for orchestrate to deploy the second staging version
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          MERGE_SHA="${{ steps.second.outputs.merge_sha }}"
+          PRIOR_SHA="${{ steps.second.outputs.prior_sha }}"
+          MAX_ATTEMPTS=5
+          ATTEMPT=0
+          RUN_ID=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            RUN_ID=$(gh run list \
+              --workflow=orchestrate.yaml \
+              --branch=main \
+              --json=databaseId,headSha \
+              --jq=".[] | select(.headSha==\"$MERGE_SHA\") | .databaseId" 2>/dev/null | head -n1 || echo "")
+            [ -n "$RUN_ID" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::orchestrate run for $MERGE_SHA did not appear within timeout"
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --exit-status --interval 60
+          # Poll trunk until staging's sha moves off the prior value, so the ring
+          # carries a distinct previous entry for the rollback to resolve.
+          ATTEMPT=0
+          while [ "$ATTEMPT" -lt 3 ]; do
+            git pull origin main --quiet || true
+            CUR_SHA="$(yq eval '.ci.state.staging.sha // ""' .github/manifest.yaml)"
+            if [ -n "$CUR_SHA" ] && [ "$CUR_SHA" != "$PRIOR_SHA" ]; then
+              break
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+
+      - name: Dispatch cascade-rollback.yaml for staging
+        id: dispatch_rollback
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Capture the version staging will roll back FROM, and the prior version
+          # it should land ON (the previous ring entry), read from the manifest the
+          # same way the promote job reads release state (yq on .github/manifest.yaml).
+          git pull origin main --quiet
+          CUR_VER="$(yq eval '.ci.state.staging.version // ""' .github/manifest.yaml)"
+          PRIOR_VER="$(yq eval '.ci.state.staging.previous[0].version // ""' .github/manifest.yaml)"
+          echo "cur_ver=$CUR_VER" >> "$GITHUB_OUTPUT"
+          echo "prior_ver=$PRIOR_VER" >> "$GITHUB_OUTPUT"
+          # Stamp the dispatch time so the wait correlates the run it created.
+          TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "dispatch_ts=$TS" >> "$GITHUB_OUTPUT"
+          gh workflow run cascade-rollback.yaml \
+            -f environment=staging \
+            -f dry_run=false \
+            --ref main
+
+      - name: Wait for cascade-rollback.yaml to complete
+        id: wait_rollback
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          TS="${{ steps.dispatch_rollback.outputs.dispatch_ts }}"
+          MAX_ATTEMPTS=4
+          ATTEMPT=0
+          RUN_ID=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            RUN_ID=$(gh run list \
+              --workflow=cascade-rollback.yaml \
+              --branch=main \
+              --created=">=$TS" \
+              --limit=1 \
+              --json=databaseId \
+              --jq='.[0].databaseId // empty' 2>/dev/null || echo "")
+            [ -n "$RUN_ID" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::cascade-rollback.yaml run for $TS did not appear within timeout"
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --exit-status --interval 60
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Assert staging rolled back to the prior version and marked diverged
+        run: |
+          set -euo pipefail
+          CUR_VER="${{ steps.dispatch_rollback.outputs.cur_ver }}"
+          PRIOR_VER="${{ steps.dispatch_rollback.outputs.prior_ver }}"
+          # Rollback re-writes staging, which already carried a version, so poll
+          # trunk until the rollback finalize state commit lands (staging version
+          # moves back to PRIOR_VER), then assert the divergence ref. Read via yq
+          # on the manifest, mirroring the promote job's read idiom.
+          MAX_ATTEMPTS=3
+          ATTEMPT=0
+          AFTER_VER=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            git pull origin main --quiet || true
+            AFTER_VER="$(yq eval '.ci.state.staging.version // ""' .github/manifest.yaml)"
+            if [ -n "$AFTER_VER" ] && [ "$AFTER_VER" != "$CUR_VER" ]; then
+              break
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          AFTER_REF="$(yq eval '.ci.state.staging.ref // ""' .github/manifest.yaml)"
+          if [ "$AFTER_VER" = "$CUR_VER" ]; then
+            echo "::error::staging version did not move back after rollback (still $CUR_VER)"
+            exit 1
+          fi
+          if [ -n "$PRIOR_VER" ] && [ "$AFTER_VER" != "$PRIOR_VER" ]; then
+            echo "::error::staging rolled back to '$AFTER_VER', expected prior '$PRIOR_VER'"
+            exit 1
+          fi
+          if [ "$AFTER_REF" != "rollback/staging" ]; then
+            echo "::error::staging not marked diverged: ref='$AFTER_REF', want 'rollback/staging'"
+            exit 1
+          fi
+          echo "✓ staging rolled back $CUR_VER -> $AFTER_VER, ref=$AFTER_REF"
+
+      - name: Write assertions summary
+        if: always()
+        run: |
+          {
+            echo "## rollback-check Assertions"
+            echo ""
+            echo "| Assertion | Result |"
+            echo "|-----------|--------|"
+            echo "| Rollback run completed | ✓ |"
+            echo "| Staging version moved back to prior | ✓ |"
+            echo "| Staging marked diverged (ref=rollback/staging) | ✓ |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   dispatch-inputs-check:
     name: Dispatch input takes effect
     runs-on: ubuntu-latest
-    needs: promote-staging
+    needs: rollback-check
     steps:
       - name: Checkout
         uses: actions/checkout@v4
