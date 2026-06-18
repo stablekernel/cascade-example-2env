@@ -7,7 +7,7 @@ ci:
     environments:
       - staging
       - prod
-    cli_version: v0.2.1-rc.2
+    cli_version: v0.2.1
     state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
     manifest_file: .github/manifest.yaml
     manifest_key: ci
@@ -104,7 +104,7 @@ ci:
           committed_by: github-actions[bot]
     staging:
       sha: 27ce51974ec55c899fc22980c5b57dfbd41e153a
-      version: v0.1.0-rc.1
+      version: v0.2.1
       committed_at: "2026-06-18T14:30:25Z"
       committed_by: github-actions[bot]
       builds:
