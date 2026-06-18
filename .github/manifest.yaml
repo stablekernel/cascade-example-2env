@@ -1,126 +1,126 @@
 ci:
-    config:
-        schema_version: 1
-        trunk_branch: main
-        triggers:
-            - src/**
-        environments:
-            - staging
-            - prod
-        cli_version: v0.2.0-rc.56
-        state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
-        manifest_file: .github/manifest.yaml
-        manifest_key: ci
-        builds:
-            - name: image
-              workflow: .github/workflows/build-image.yaml
-              triggers: []
-              state_tags:
-                - image_digest
-              matrix:
-                dimensions:
-                    arch:
-                        - amd64
-                        - arm64
-                    os:
-                        - linux
-                max_parallel: 2
-                fail_fast: false
-              artifact:
-                upload: dist/**
-            - name: bundle
-              workflow: .github/workflows/build-bundle.yaml
-              triggers: []
-              artifact:
-                downloads:
-                    - image
-        deploys:
-            - name: app
-              workflow: .github/workflows/deploy-app.yaml
-              triggers: []
-        publish:
-            workflow: .github/workflows/publish.yaml
-        dispatch_inputs:
-            force:
-                type: boolean
-                default: false
-                description: Force re-promote
-            reason:
-                type: string
-                description: Operator note for this manual run
-        pr_preview:
-            enabled: true
-            comment: true
-        environment_config:
-            prod:
-                gha_environment: prod
-    state:
-        prod: {}
-        release:
-            sha: b255a0a0d7ebe2e9d475c482d17d89e8c0bc236e
-            version: v0.1.0
-            committed_at: "2026-06-18T04:07:10Z"
-            committed_by: github-actions[bot]
-            previous:
-                - sha: 6b169e111f3b94cd074e3145b7039d786411e325
-                  version: v0.1.0
-                  committed_at: "2026-06-18T01:20:47Z"
-                  committed_by: github-actions[bot]
-                - sha: f4563a2c738ebd5af9ff24411f79b87498259c53
-                  version: v0.1.0
-                  committed_at: "2026-06-18T00:01:40Z"
-                  committed_by: github-actions[bot]
-                - sha: ddc07f201fbc7c766f5feab0b4d370efcb22653e
-                  version: v0.1.0
-                  committed_at: "2026-06-17T20:19:31Z"
-                  committed_by: github-actions[bot]
-                - sha: b5cd95043c3adbe840a3bf3946f715752dd3c699
-                  version: v0.1.0
-                  committed_at: "2026-06-17T19:17:42Z"
-                  committed_by: github-actions[bot]
-                - sha: 9059bafce67c5435f6e5f51de93b8753cc7ca376
-                  version: v0.1.0
-                  committed_at: "2026-06-17T18:59:06Z"
-                  committed_by: github-actions[bot]
-                - sha: 7a991c96cdb4d6196d057670fc61c9a315d0f1d7
-                  version: v0.1.0
-                  committed_at: "2026-06-17T18:47:54Z"
-                  committed_by: github-actions[bot]
-                - sha: 7ce1aa347ea318242336093d45dbef55200b4f55
-                  version: v0.1.0
-                  committed_at: "2026-06-17T17:37:02Z"
-                  committed_by: github-actions[bot]
-                - sha: f0722db8f0afb29048da041b3be7d7ec2cb9e706
-                  version: v0.1.0
-                  committed_at: "2026-06-17T16:19:03Z"
-                  committed_by: github-actions[bot]
-                - sha: 87b6e2a59dd9de0f866d1a64c4a913602585d1da
-                  version: v0.1.0
-                  committed_at: "2026-06-17T15:20:49Z"
-                  committed_by: github-actions[bot]
-                - sha: c86988596d6a1f7697b91d06975d489d5d30b073
-                  version: v0.1.0
-                  committed_at: "2026-06-17T14:21:02Z"
-                  committed_by: github-actions[bot]
-        staging:
-            sha: b255a0a0d7ebe2e9d475c482d17d89e8c0bc236e
-            version: v0.1.0-rc.23
-            committed_at: "2026-06-18T04:06:08Z"
-            committed_by: joshua-temple
-            builds:
-                bundle:
-                    sha: b255a0a0d7ebe2e9d475c482d17d89e8c0bc236e
-                    artifact_id: bundle-b255a0a0d7ebe2e9d475c482d17d89e8c0bc236e
-                image:
-                    sha: b255a0a0d7ebe2e9d475c482d17d89e8c0bc236e
-                    artifact_id: image-linux-arm64
-            deploys:
-                app:
-                    sha: b255a0a0d7ebe2e9d475c482d17d89e8c0bc236e
-                    deployed_at: "2026-06-18T04:06:08Z"
-                    deployed_by: joshua-temple
-    latest_release:
-        version: v0.1.0
-        sha: b255a0a0d7ebe2e9d475c482d17d89e8c0bc236e
-        released_on: "2026-06-18T04:07:10Z"
-        released_by: github-actions[bot]
+  config:
+    schema_version: 1
+    trunk_branch: main
+    triggers:
+      - src/**
+    environments:
+      - staging
+      - prod
+    cli_version: v0.2.0-rc.56
+    state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
+    manifest_file: .github/manifest.yaml
+    manifest_key: ci
+    builds:
+      - name: image
+        workflow: .github/workflows/build-image.yaml
+        triggers: []
+        state_tags:
+          - image_digest
+        matrix:
+          dimensions:
+            arch:
+              - amd64
+              - arm64
+            os:
+              - linux
+          max_parallel: 2
+          fail_fast: false
+        artifact:
+          upload: dist/**
+      - name: bundle
+        workflow: .github/workflows/build-bundle.yaml
+        triggers: []
+        artifact:
+          downloads:
+            - image
+    deploys:
+      - name: app
+        workflow: .github/workflows/deploy-app.yaml
+        triggers: []
+    publish:
+      workflow: .github/workflows/publish.yaml
+    dispatch_inputs:
+      force:
+        type: boolean
+        default: false
+        description: Force re-promote
+      reason:
+        type: string
+        description: Operator note for this manual run
+    pr_preview:
+      enabled: true
+      comment: true
+    environment_config:
+      prod:
+        gha_environment: prod
+  state:
+    prod: {}
+    release:
+      sha: b255a0a0d7ebe2e9d475c482d17d89e8c0bc236e
+      version: v0.1.0
+      committed_at: "2026-06-18T04:07:10Z"
+      committed_by: github-actions[bot]
+      previous:
+        - sha: 6b169e111f3b94cd074e3145b7039d786411e325
+          version: v0.1.0
+          committed_at: "2026-06-18T01:20:47Z"
+          committed_by: github-actions[bot]
+        - sha: f4563a2c738ebd5af9ff24411f79b87498259c53
+          version: v0.1.0
+          committed_at: "2026-06-18T00:01:40Z"
+          committed_by: github-actions[bot]
+        - sha: ddc07f201fbc7c766f5feab0b4d370efcb22653e
+          version: v0.1.0
+          committed_at: "2026-06-17T20:19:31Z"
+          committed_by: github-actions[bot]
+        - sha: b5cd95043c3adbe840a3bf3946f715752dd3c699
+          version: v0.1.0
+          committed_at: "2026-06-17T19:17:42Z"
+          committed_by: github-actions[bot]
+        - sha: 9059bafce67c5435f6e5f51de93b8753cc7ca376
+          version: v0.1.0
+          committed_at: "2026-06-17T18:59:06Z"
+          committed_by: github-actions[bot]
+        - sha: 7a991c96cdb4d6196d057670fc61c9a315d0f1d7
+          version: v0.1.0
+          committed_at: "2026-06-17T18:47:54Z"
+          committed_by: github-actions[bot]
+        - sha: 7ce1aa347ea318242336093d45dbef55200b4f55
+          version: v0.1.0
+          committed_at: "2026-06-17T17:37:02Z"
+          committed_by: github-actions[bot]
+        - sha: f0722db8f0afb29048da041b3be7d7ec2cb9e706
+          version: v0.1.0
+          committed_at: "2026-06-17T16:19:03Z"
+          committed_by: github-actions[bot]
+        - sha: 87b6e2a59dd9de0f866d1a64c4a913602585d1da
+          version: v0.1.0
+          committed_at: "2026-06-17T15:20:49Z"
+          committed_by: github-actions[bot]
+        - sha: c86988596d6a1f7697b91d06975d489d5d30b073
+          version: v0.1.0
+          committed_at: "2026-06-17T14:21:02Z"
+          committed_by: github-actions[bot]
+    staging:
+      sha: 20320cf1fd59659da5e34c9146b1f30ba89782ef
+      version: v0.1.0-rc.24
+      committed_at: "2026-06-18T04:08:36Z"
+      committed_by: github-actions[bot]
+      builds:
+        bundle:
+          sha: 20320cf1fd59659da5e34c9146b1f30ba89782ef
+          artifact_id: bundle-dispatch-sentinel-27735933079-14629
+        image:
+          sha: 20320cf1fd59659da5e34c9146b1f30ba89782ef
+          artifact_id: image-linux-amd64
+      deploys:
+        app:
+          sha: 20320cf1fd59659da5e34c9146b1f30ba89782ef
+          deployed_at: "2026-06-18T04:08:36Z"
+          deployed_by: github-actions[bot]
+  latest_release:
+    version: v0.1.0
+    sha: b255a0a0d7ebe2e9d475c482d17d89e8c0bc236e
+    released_on: "2026-06-18T04:07:10Z"
+    released_by: github-actions[bot]
