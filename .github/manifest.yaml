@@ -103,23 +103,23 @@ ci:
           committed_at: "2026-06-17T18:47:54Z"
           committed_by: github-actions[bot]
     staging:
-      sha: 87162da9cf8cc5c90c9b3c118c445265196ae467
-      version: v0.3.0-rc.20
-      committed_at: "2026-06-22T08:08:09Z"
-      committed_by: github-actions[bot]
+      sha: 6cbbf0b8ee44d3316f5109d4bc7fc53678d9355b
+      version: v0.1.0-rc.0
+      committed_at: "2026-06-23T02:19:50Z"
+      committed_by: joshua-temple
       builds:
         bundle:
-          sha: 87162da9cf8cc5c90c9b3c118c445265196ae467
-          artifact_id: bundle-dispatch-sentinel-27938147708-2211
+          sha: 6cbbf0b8ee44d3316f5109d4bc7fc53678d9355b
+          artifact_id: bundle-6cbbf0b8ee44d3316f5109d4bc7fc53678d9355b
         image:
-          sha: 87162da9cf8cc5c90c9b3c118c445265196ae467
+          sha: 6cbbf0b8ee44d3316f5109d4bc7fc53678d9355b
           artifact_id: image-linux-amd64
       deploys:
         app:
-          sha: 87162da9cf8cc5c90c9b3c118c445265196ae467
+          sha: 6cbbf0b8ee44d3316f5109d4bc7fc53678d9355b
           version: v0.3.0-rc.20
-          deployed_at: "2026-06-22T08:08:09Z"
-          deployed_by: github-actions[bot]
+          deployed_at: "2026-06-23T02:19:50Z"
+          deployed_by: joshua-temple
       ref: rollback/staging
       base_sha: 7db6d6d66c75e0a67fd4f7aee745de922ebb62d4
       previous:
