@@ -1,93 +1,56 @@
 ci:
-  config:
-    schema_version: 1
-    trunk_branch: main
-    triggers:
-      - src/**
-    environments:
-      - staging
-      - prod
-    cli_version: v0.3.0-rc.23
-    state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
-    manifest_file: .github/manifest.yaml
-    manifest_key: ci
-    builds:
-      - name: image
-        workflow: .github/workflows/build-image.yaml
-        triggers: []
-        state_tags:
-          - image_digest
-        matrix:
-          dimensions:
-            arch:
-              - amd64
-              - arm64
-            os:
-              - linux
-          max_parallel: 2
-          fail_fast: false
-        artifact:
-          upload: dist/**
-      - name: bundle
-        workflow: .github/workflows/build-bundle.yaml
-        triggers: []
-        artifact:
-          downloads:
-            - image
-    deploys:
-      - name: app
-        workflow: .github/workflows/deploy-app.yaml
-        triggers: []
-    publish:
-      workflow: .github/workflows/publish.yaml
-    dispatch_inputs:
-      force:
-        type: boolean
-        default: false
-        description: Force re-promote
-      reason:
-        type: string
-        description: Operator note for this manual run
-    pr_preview:
-      enabled: true
-      comment: true
-    environment_config:
-      prod:
-        gha_environment: prod
-  state:
-    prod: {}
-    release:
-      sha: 24883a112a58a18553c739ec75ed39849bce9d66
-      version: v0.1.0
-      committed_at: "2026-06-23T06:47:39Z"
-      committed_by: github-actions[bot]
-    staging:
-      sha: a8d489516db216b2f04ce3c85fede36fd04f5a31
-      version: v0.3.0-rc.23
-      committed_at: "2026-06-23T06:52:34Z"
-      committed_by: github-actions[bot]
-      builds:
-        bundle:
-          sha: a8d489516db216b2f04ce3c85fede36fd04f5a31
-          artifact_id: bundle-dispatch-sentinel-28007618080-27708
-        image:
-          sha: a8d489516db216b2f04ce3c85fede36fd04f5a31
-          artifact_id: image-linux-arm64
-      deploys:
-        app:
-          sha: a8d489516db216b2f04ce3c85fede36fd04f5a31
-          version: v0.3.0-rc.23
-          deployed_at: "2026-06-23T06:52:34Z"
-          deployed_by: github-actions[bot]
-      ref: rollback/staging
-      base_sha: 827cbde34853733bbb78651c2e14d3b0bddf28d5
-      previous:
-        - sha: 827cbde34853733bbb78651c2e14d3b0bddf28d5
-          version: v0.3.0-rc.23
-          committed_at: "2026-06-23T06:49:26Z"
-          committed_by: joshua-temple
-  latest_release:
-    version: v0.1.0
-    sha: 24883a112a58a18553c739ec75ed39849bce9d66
-    released_on: "2026-06-23T06:47:39Z"
-    released_by: github-actions[bot]
+    config:
+        schema_version: 1
+        trunk_branch: main
+        triggers:
+            - src/**
+        environments:
+            - staging
+            - prod
+        cli_version: v0.3.0-rc.23
+        state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
+        manifest_file: .github/manifest.yaml
+        manifest_key: ci
+        builds:
+            - name: image
+              workflow: .github/workflows/build-image.yaml
+              triggers: []
+              state_tags:
+                - image_digest
+              matrix:
+                dimensions:
+                    arch:
+                        - amd64
+                        - arm64
+                    os:
+                        - linux
+                max_parallel: 2
+                fail_fast: false
+              artifact:
+                upload: dist/**
+            - name: bundle
+              workflow: .github/workflows/build-bundle.yaml
+              triggers: []
+              artifact:
+                downloads:
+                    - image
+        deploys:
+            - name: app
+              workflow: .github/workflows/deploy-app.yaml
+              triggers: []
+        publish:
+            workflow: .github/workflows/publish.yaml
+        dispatch_inputs:
+            force:
+                type: boolean
+                default: false
+                description: Force re-promote
+            reason:
+                type: string
+                description: Operator note for this manual run
+        pr_preview:
+            enabled: true
+            comment: true
+        environment_config:
+            prod:
+                gha_environment: prod
