@@ -132,3 +132,5 @@ ci:
     sha: 4083cabc9a2a5e10e4b41c4d48f46d7d37c226a1
     released_on: "2026-06-22T08:03:12Z"
     released_by: github-actions[bot]
+config:
+  state: {}
