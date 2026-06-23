@@ -22,7 +22,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
+
+      - name: Setup cascade CLI
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.2.1
+        with:
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+          version: v0.3.0
 
       - name: Configure Git
         run: |
@@ -33,13 +40,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
         run: |
-          # Reset .github/manifest.yaml config.state to {}.
-          # Touches the manifest only (not src/**), so it does not match
-          # orchestrate's path filter and correctly does not fire orchestrate.
-          yq eval '.config.state = {}' -i .github/manifest.yaml
-          git add .github/manifest.yaml
-          git commit --no-gpg-sign -m "chore: reset state for scenario test [skip ci]"
-          git push origin main
+          # Clear the live manifest state under .ci.state so the run is
+          # deterministic regardless of prior history. cascade reset --state wipes
+          # every environment's recorded state, including any divergence a prior
+          # run's rollback-check left behind (staging's ref=rollback/staging plus
+          # base_sha/previous). The earlier yq '.config.state = {}' rewrite touched
+          # a vestigial config.state map, never .ci.state, so a diverged staging
+          # bled into the next run and made promote-staging's preflight refuse to
+          # promote from a diverged environment. Touches the manifest only (not
+          # src/**), so it does not match orchestrate's path filter and correctly
+          # does not fire orchestrate. --push lands the reset commit on trunk, so
+          # the downstream jobs that check out main read a clean, rejoined staging.
+          cascade reset --state --push --config .github/manifest.yaml
 
       - name: Clean slate - delete leftover releases and tags
         env:
@@ -50,10 +62,23 @@ jobs:
           git fetch --tags --quiet || true
           for t in $(git tag -l 'v*' 'rel-*'); do git push origin --delete "$t" 2>/dev/null || true; done
 
-      - name: Verify push succeeded
+      - name: Verify state was cleared
         run: |
+          # Sync to the reset commit cascade just pushed, then assert .ci.state is
+          # empty. This is the invariant that matters for the downstream jobs: a
+          # stale staging divergence (ref=rollback/staging) left by a prior run's
+          # rollback-check must be gone before promote-staging preflights, or
+          # promote rightly refuses to promote from a diverged environment.
+          git fetch origin main --quiet
+          git reset --hard origin/main
           git log -1 --oneline
-          git log --oneline | grep "reset state for scenario test" || exit 1
+          REMAINING="$(yq eval '.ci.state // {} | length' .github/manifest.yaml)"
+          if [ "$REMAINING" != "0" ]; then
+            echo "::error::.ci.state not cleared after reset (still $REMAINING entries)"
+            yq eval '.ci.state' .github/manifest.yaml
+            exit 1
+          fi
+          echo "✓ .ci.state cleared; staging carries no divergence into promote"
 
   commit-and-build:
     name: Commit dummy change and validate build output
