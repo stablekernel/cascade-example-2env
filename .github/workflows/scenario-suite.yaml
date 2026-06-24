@@ -18,7 +18,24 @@ jobs:
   reset:
     name: Reset manifest state
     runs-on: ubuntu-latest
+    outputs:
+      # Captured before anything is dispatched or merged. The reconcile job
+      # enumerates every run this repo produced at or after this instant and
+      # fails if any is unaccounted for in the ledger. Recorded first, in the
+      # earliest job, so no run the suite causes can fall outside the window.
+      window-start: ${{ steps.window.outputs.window-start }}
     steps:
+      # The reconcile window opens here, before the first reset push, dispatch,
+      # or merge. Every run the suite goes on to cause lands at or after this
+      # timestamp, so the reconcile job sees all of them.
+      - name: Open reconcile window
+        id: window
+        run: |
+          set -euo pipefail
+          WINDOW_START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "window-start=$WINDOW_START" >> "$GITHUB_OUTPUT"
+          echo "reconcile window opened at $WINDOW_START"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -119,6 +136,12 @@ jobs:
           git commit --no-gpg-sign -m "feat: dummy src change for scenario test"
           git push origin "$BRANCH"
 
+          # The seed branch head SHA keys the Cascade PR Preview run this PR
+          # fires. Capture it before the squash-merge deletes the branch so the
+          # reconcile ledger can register that preview run by head SHA.
+          SEED_HEAD_SHA="$(git rev-parse HEAD)"
+          echo "seed_head_sha=$SEED_HEAD_SHA" >> "$GITHUB_OUTPUT"
+
           gh pr create --base main --head "$BRANCH" \
             --title "feat: dummy src change for scenario test" \
             --body "Automated scenario run; drives orchestrate on merge."
@@ -169,6 +192,52 @@ jobs:
           gh run watch "$RUN_ID" --exit-status --interval 60
 
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve seed PR Cascade PR Preview run
+        id: seed_preview
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The seed PR fired the Cascade PR Preview workflow on its head SHA.
+          # Historically the suite never read this run's conclusion, so a broken
+          # generated preview workflow (e.g. a stale setup-cli pin) stayed
+          # invisible. Resolve its run id here so the reconcile ledger registers
+          # it expected:success; from now on a red seed preview reds the suite.
+          SEED_HEAD_SHA="${{ steps.seed.outputs.seed_head_sha }}"
+          MAX_ATTEMPTS=5
+          ATTEMPT=0
+          RUN_ID=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            RUN_ID=$(gh run list \
+              --workflow=cascade-pr-preview.yaml \
+              --json=databaseId,headSha \
+              --jq=".[] | select(.headSha==\"$SEED_HEAD_SHA\") | .databaseId" 2>/dev/null | head -n1 || echo "")
+            [ -n "$RUN_ID" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Cascade PR Preview run for seed head $SEED_HEAD_SHA did not appear within timeout"
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Register seed PR Cascade PR Preview run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.seed_preview.outputs.run_id }}
+          expected-conclusion: success
+          reason: seed-pr-preview
+          upload: 'true'
+
+      - name: Register seed orchestrate run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.wait_orchestrate.outputs.run_id }}
+          expected-conclusion: success
+          reason: seed-orchestrate-merge
+          upload: 'true'
 
       - name: Assert per-leg matrix artifacts exist (artifacts API)
         env:
@@ -368,6 +437,14 @@ jobs:
 
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
+      - name: Register promote run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.wait_promote.outputs.run_id }}
+          expected-conclusion: success
+          reason: promote-staging-to-prod
+          upload: 'true'
+
       - name: Assert manifest state shape (release marker populated)
         run: |
           # A terminal promotion publishes the release and records the version
@@ -475,6 +552,11 @@ jobs:
           git add src/rollback-marker.txt
           git commit --no-gpg-sign -m "feat: second staging version for rollback test"
           git push origin "$BRANCH"
+          # Capture the seed branch head SHA before the squash-merge deletes the
+          # branch; it keys the Cascade PR Preview run this PR fires, which the
+          # reconcile ledger registers below.
+          SEED_HEAD_SHA="$(git rev-parse HEAD)"
+          echo "seed_head_sha=$SEED_HEAD_SHA" >> "$GITHUB_OUTPUT"
           gh pr create --base main --head "$BRANCH" \
             --title "feat: second staging version for rollback test" \
             --body "Automated scenario run; drives orchestrate on merge."
@@ -484,6 +566,7 @@ jobs:
           echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Wait for orchestrate to deploy the second staging version
+        id: wait_second_orchestrate
         env:
           GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
         run: |
@@ -520,6 +603,51 @@ jobs:
             ATTEMPT=$((ATTEMPT + 1))
             sleep 60
           done
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve second seed PR Cascade PR Preview run
+        id: rollback_seed_preview
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The rollback seed PR also fires the Cascade PR Preview workflow on its
+          # head SHA. Resolve its run id so reconcile registers it expected:success
+          # the same way as the first seed PR.
+          SEED_HEAD_SHA="${{ steps.second.outputs.seed_head_sha }}"
+          MAX_ATTEMPTS=5
+          ATTEMPT=0
+          RUN_ID=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            RUN_ID=$(gh run list \
+              --workflow=cascade-pr-preview.yaml \
+              --json=databaseId,headSha \
+              --jq=".[] | select(.headSha==\"$SEED_HEAD_SHA\") | .databaseId" 2>/dev/null | head -n1 || echo "")
+            [ -n "$RUN_ID" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Cascade PR Preview run for rollback seed head $SEED_HEAD_SHA did not appear within timeout"
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Register second seed PR Cascade PR Preview run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.rollback_seed_preview.outputs.run_id }}
+          expected-conclusion: success
+          reason: rollback-seed-pr-preview
+          upload: 'true'
+
+      - name: Register second seed orchestrate run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.wait_second_orchestrate.outputs.run_id }}
+          expected-conclusion: success
+          reason: rollback-seed-orchestrate
+          upload: 'true'
 
       - name: Dispatch cascade-rollback.yaml for staging
         id: dispatch_rollback
@@ -571,6 +699,14 @@ jobs:
           fi
           gh run watch "$RUN_ID" --exit-status --interval 60
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Register cascade-rollback run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.wait_rollback.outputs.run_id }}
+          expected-conclusion: success
+          reason: rollback-dispatch
+          upload: 'true'
 
       - name: Assert staging rolled back to the prior version and marked diverged
         run: |
@@ -698,6 +834,14 @@ jobs:
           # Block on THIS run; a failed orchestrate means the input never reached state.
           gh run watch "$RUN_ID" --exit-status --interval 60
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Register dispatched orchestrate run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.wait_dispatch.outputs.run_id }}
+          expected-conclusion: success
+          reason: dispatch-inputs-orchestrate
+          upload: 'true'
 
       - name: Assert dispatched reason reached consolidated state
         env:
@@ -835,6 +979,14 @@ jobs:
           gh run watch "$RUN_ID" --exit-status --interval 60
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
+      - name: Register preview-check Cascade PR Preview run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.wait_preview.outputs.run_id }}
+          expected-conclusion: success
+          reason: preview-check-run
+          upload: 'true'
+
       - name: Assert preview comment was posted (hard fail)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -890,3 +1042,26 @@ jobs:
             echo "| cascade-pr-preview run succeeded | ✓ |"
             echo "| Preview comment posted by github-actions[bot] (marker) | ✓ |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------
+  # Reconcile gate: structural coverage backstop. The per-job asserts above
+  # still gate each run they remember to wait on; this job is additive. It
+  # enumerates EVERY run this repo produced since window-start (captured in the
+  # reset job before the first push, dispatch, or merge) and fails if any is
+  # unaccounted for in the ledger the register-run steps uploaded - an
+  # unregistered non-success run, or a registered run that concluded other than
+  # its expected conclusion. That turns any fire-and-forget run the suite forgot
+  # to gate (historically the seed PR's Cascade PR Preview run) into a hard red.
+  reconcile:
+    name: Reconcile scenario-window runs
+    needs: [reset, commit-and-build, promote-staging, rollback-check, dispatch-inputs-check, pr-preview-check]
+    if: always()
+    uses: stablekernel/cascade/.github/workflows/fleet-reconcile.yaml@main
+    permissions:
+      contents: read
+      actions: read
+    with:
+      window-start: ${{ needs.reset.outputs.window-start }}
+      # Artifact mode: each register-run step uploaded a per-job ledger under
+      # the default cascade-run-ledger-* name; reconcile globs and merges them.
+      cascade-ref: main
