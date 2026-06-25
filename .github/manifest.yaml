@@ -63,7 +63,7 @@ ci:
       committed_by: github-actions[bot]
     staging:
       sha: be83b3ab1294b7b6642503627038e3fec97558ee
-      version: v0.1.0-rc.1
+      version: v0.5.0-rc.2
       committed_at: "2026-06-25T16:30:39Z"
       committed_by: github-actions[bot]
       builds:
@@ -76,14 +76,14 @@ ci:
       deploys:
         app:
           sha: be83b3ab1294b7b6642503627038e3fec97558ee
-          version: v0.1.0-rc.0
+          version: v0.5.0-rc.2
           deployed_at: "2026-06-25T16:30:39Z"
           deployed_by: github-actions[bot]
       ref: rollback/staging
       base_sha: 9d85478739771d2a600212d1d31e5d63263bc0bb
       previous:
         - sha: 9d85478739771d2a600212d1d31e5d63263bc0bb
-          version: v0.1.0-rc.1
+          version: v0.5.0-rc.2
           committed_at: "2026-06-25T16:27:13Z"
           committed_by: joshua-temple
   latest_release:
