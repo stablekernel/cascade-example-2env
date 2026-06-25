@@ -68,7 +68,26 @@ jobs:
           # src/**), so it does not match orchestrate's path filter and correctly
           # does not fire orchestrate. --push lands the reset commit on trunk, so
           # the downstream jobs that check out main read a clean, rejoined staging.
-          cascade reset --state --push --config .github/manifest.yaml
+          # On the live fleet a concurrent writer can advance main between the
+          # reset's read and its push, so a plain push is rejected non-fast-forward.
+          # Retry with bounded, growing backoff: refresh the checkout to the
+          # current trunk tip and re-run reset so it re-reads main, re-applies the
+          # reset, and re-pushes. Fail closed if trunk keeps advancing.
+          reset_pushed=false
+          for attempt in 1 2 3 4 5; do
+            if cascade reset --state --push --config .github/manifest.yaml; then
+              reset_pushed=true
+              break
+            fi
+            echo "reset push attempt ${attempt} rejected; refreshing trunk and retrying"
+            git fetch origin main --quiet
+            git reset --hard origin/main >/dev/null
+            sleep "$((attempt * 5))"
+          done
+          if [ "${reset_pushed}" != true ]; then
+            echo "::error::cascade reset --state --push failed after 5 attempts; trunk kept advancing"
+            exit 1
+          fi
 
       - name: Clean slate - delete leftover releases and tags
         env:
