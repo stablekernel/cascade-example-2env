@@ -7,7 +7,7 @@ ci:
     environments:
       - staging
       - prod
-    cli_version: v0.6.0-dryrun.2
+    cli_version: v0.5.1
     state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
     manifest_file: .github/manifest.yaml
     manifest_key: ci
@@ -63,7 +63,7 @@ ci:
       committed_by: github-actions[bot]
     staging:
       sha: 208e0714045aa428db0092cf37c862e280c67e28
-      version: v0.1.0-rc.1
+      version: v0.5.1
       committed_at: "2026-06-26T22:37:48Z"
       committed_by: github-actions[bot]
       builds:
@@ -76,14 +76,14 @@ ci:
       deploys:
         app:
           sha: 208e0714045aa428db0092cf37c862e280c67e28
-          version: v0.1.0-rc.0
+          version: v0.5.1
           deployed_at: "2026-06-26T22:37:48Z"
           deployed_by: github-actions[bot]
       ref: rollback/staging
       base_sha: e8c602807b6660d5dd9bbc09eaf8e386f8152899
       previous:
         - sha: e8c602807b6660d5dd9bbc09eaf8e386f8152899
-          version: v0.1.0-rc.1
+          version: v0.5.1
           committed_at: "2026-06-26T22:35:44Z"
           committed_by: joshua-temple
   latest_release:
