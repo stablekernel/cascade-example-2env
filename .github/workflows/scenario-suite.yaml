@@ -50,8 +50,8 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config user.name "scenario-suite"
-          git config user.email "scenario-suite@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Reset manifest state
         env:
@@ -129,8 +129,8 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config user.name "scenario-suite"
-          git config user.email "scenario-suite@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Open and merge PR with src change
         id: seed
@@ -139,8 +139,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Emulate a real user: land the src change through branch -> PR ->
-          # squash-merge, authored by the PAT so the merge push fires orchestrate.
+          # Land the src change through branch -> PR -> rebase-merge, which
+          # replays the bot-authored branch commit onto main and fires orchestrate.
           BRANCH="scenario/src-$(date +%s)-$RANDOM"
           git fetch origin main --quiet
           git checkout -B "$BRANCH" origin/main
@@ -149,14 +149,14 @@ jobs:
           echo "timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > src/version.txt
           git add src/version.txt
 
-          # The squashed commit subject is the PR title, so the conventional
-          # type must live there. No [skip ci]/[ci skip] anywhere, or GitHub
-          # cancels the orchestrate trigger.
+          # Rebase preserves the branch commit's subject on main, so the
+          # conventional type must live in the commit message. No [skip ci]/[ci
+          # skip] anywhere, or GitHub cancels the orchestrate trigger.
           git commit --no-gpg-sign -m "feat: dummy src change for scenario test"
           git push origin "$BRANCH"
 
           # The seed branch head SHA keys the Cascade PR Preview run this PR
-          # fires. Capture it before the squash-merge deletes the branch so the
+          # fires. Capture it before the rebase-merge deletes the branch so the
           # reconcile ledger can register that preview run by head SHA.
           SEED_HEAD_SHA="$(git rev-parse HEAD)"
           echo "seed_head_sha=$SEED_HEAD_SHA" >> "$GITHUB_OUTPUT"
@@ -164,7 +164,7 @@ jobs:
           gh pr create --base main --head "$BRANCH" \
             --title "feat: dummy src change for scenario test" \
             --body "Automated scenario run; drives orchestrate on merge."
-          gh pr merge "$BRANCH" --squash --delete-branch
+          gh pr merge "$BRANCH" --rebase --delete-branch
 
           # Capture the merge SHA on trunk; it keys the orchestrate wait.
           git fetch origin main --quiet
@@ -544,8 +544,8 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config user.name "scenario-suite"
-          git config user.email "scenario-suite@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Land a second staging version so a prior ring entry exists
         id: second
@@ -558,7 +558,7 @@ jobs:
           # staging's deploy-history ring. staging is the deployable env in this
           # [staging, prod] model (prod is the publish boundary and emits no deploy
           # jobs), so it is the env the manual rollback re-deploys. Land a second
-          # src change through branch -> PR -> squash-merge so orchestrate deploys a
+          # src change through branch -> PR -> rebase-merge so orchestrate deploys a
           # new SHA to staging.
           git pull origin main --quiet
           PRIOR_SHA="$(yq eval '.ci.state.staging.sha // ""' .github/manifest.yaml)"
@@ -571,7 +571,7 @@ jobs:
           git add src/rollback-marker.txt
           git commit --no-gpg-sign -m "feat: second staging version for rollback test"
           git push origin "$BRANCH"
-          # Capture the seed branch head SHA before the squash-merge deletes the
+          # Capture the seed branch head SHA before the rebase-merge deletes the
           # branch; it keys the Cascade PR Preview run this PR fires, which the
           # reconcile ledger registers below.
           SEED_HEAD_SHA="$(git rev-parse HEAD)"
@@ -579,7 +579,7 @@ jobs:
           gh pr create --base main --head "$BRANCH" \
             --title "feat: second staging version for rollback test" \
             --body "Automated scenario run; drives orchestrate on merge."
-          gh pr merge "$BRANCH" --squash --delete-branch
+          gh pr merge "$BRANCH" --rebase --delete-branch
           git fetch origin main --quiet
           MERGE_SHA="$(git rev-parse origin/main)"
           echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"
@@ -918,8 +918,8 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config user.name "scenario-suite"
-          git config user.email "scenario-suite@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Create and push test PR branch
         id: branch
