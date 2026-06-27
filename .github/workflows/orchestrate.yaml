@@ -54,14 +54,14 @@ jobs:
       base_build_bundle: ${{ steps.setup.outputs.base_build_bundle }}
       base_deploy_app: ${{ steps.setup.outputs.base_deploy_app }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.6.0-rc.1
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.6.0-dryrun.8
         with:
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
-          version: v0.6.0-rc.1
+          version: v0.6.0-dryrun.8
       - name: Run Setup
         id: setup
         env:
@@ -96,13 +96,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Collect matrix leg artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: image-*
           path: dist
           merge-multiple: true
       - name: Upload artifact build-image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-image
           path: dist/**
@@ -116,7 +116,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Download artifact from image
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-image
           path: build-image
@@ -155,7 +155,7 @@ jobs:
       image_artifact_id: ${{ needs.build-image.outputs.artifact_id }}
       image_image_digest: ${{ needs.build-image.outputs.image_digest }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Generate Summary
@@ -199,10 +199,10 @@ jobs:
             echo "_No outputs produced_" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.6.0-rc.1
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.6.0-dryrun.8
         with:
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
-          version: v0.6.0-rc.1
+          version: v0.6.0-dryrun.8
       - name: Generate Changelog
         id: changelog
         env:
