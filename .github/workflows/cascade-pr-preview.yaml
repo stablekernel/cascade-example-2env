@@ -24,9 +24,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.6.0-dryrun.12
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.6.0-dryrun.13
         with:
-          version: v0.6.0-dryrun.12
+          version: v0.6.0-dryrun.13
           token: ${{ github.token }}
 
       - name: Validate manifest
