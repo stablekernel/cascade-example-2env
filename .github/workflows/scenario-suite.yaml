@@ -96,7 +96,7 @@ jobs:
           # Clear the live manifest state under .ci.state so the run is
           # deterministic regardless of prior history. cascade reset --state wipes
           # every environment's recorded state, including any divergence a prior
-          # run's rollback-check left behind (staging's ref=rollback/staging plus
+          # run's rollback-check left behind (prod's ref=rollback/prod plus
           # base_sha/previous). The earlier yq '.config.state = {}' rewrite touched
           # a vestigial config.state map, never .ci.state, so a diverged staging
           # bled into the next run and made promote-staging's preflight refuse to
@@ -138,7 +138,7 @@ jobs:
         run: |
           # Sync to the reset commit cascade just pushed, then assert .ci.state is
           # empty. This is the invariant that matters for the downstream jobs: a
-          # stale staging divergence (ref=rollback/staging) left by a prior run's
+          # stale prod divergence (ref=rollback/prod) left by a prior run's
           # rollback-check must be gone before promote-staging preflights, or
           # promote rightly refuses to promote from a diverged environment.
           git fetch origin main --quiet
@@ -150,7 +150,7 @@ jobs:
             yq eval '.ci.state' .github/manifest.yaml
             exit 1
           fi
-          echo "✓ .ci.state cleared; staging carries no divergence into promote"
+          echo "✓ .ci.state cleared; prod carries no divergence into promote"
 
   commit-and-build:
     name: Commit dummy change and validate build output
@@ -640,7 +640,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   rollback-check:
-    name: Rollback staging to prior version
+    name: Rollback prod to prior version
     runs-on: ubuntu-latest
     needs: promote-staging
     steps:
@@ -691,19 +691,91 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Land a second staging version so a prior ring entry exists
+      - name: Deploy the first prod version so prod carries a base
+        id: prod_first
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # staging is the first environment; the runtime guard refuses to roll it
+          # back because it tracks trunk and keeps no deploy-history ring. prod is
+          # the only rollback-eligible environment in this [staging, prod] model,
+          # so this scenario rolls prod back to its prior version. A rollback can
+          # only resolve a prior target once prod has carried two distinct deployed
+          # versions: the second deploy records the displaced version in prod's
+          # deploy-history ring.
+          #
+          # promote-staging published the release but left prod empty. A default
+          # promote now runs the release -> prod step (the release marker is ahead
+          # of prod), landing prod on its first version.
+          git pull origin main --quiet
+          TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "dispatch_ts=$TS" >> "$GITHUB_OUTPUT"
+          gh workflow run promote.yaml \
+            -f mode=default \
+            --ref main
+
+      - name: Wait for the first prod promote to complete
+        id: wait_prod_first
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          TS="${{ steps.prod_first.outputs.dispatch_ts }}"
+          MAX_ATTEMPTS=4
+          ATTEMPT=0
+          RUN_ID=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            RUN_ID=$(gh run list \
+              --workflow=promote.yaml \
+              --branch=main \
+              --created=">=$TS" \
+              --limit=1 \
+              --json=databaseId \
+              --jq='.[0].databaseId // empty' 2>/dev/null || echo "")
+            [ -n "$RUN_ID" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::promote.yaml run for $TS did not appear within timeout"
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --exit-status --interval 60
+          # Poll trunk until prod carries its first deployed version.
+          PROD_VER=""
+          ATTEMPT=0
+          while [ "$ATTEMPT" -lt 3 ]; do
+            git pull origin main --quiet || true
+            PROD_VER="$(yq eval '.ci.state.prod.version // ""' .github/manifest.yaml)"
+            [ -n "$PROD_VER" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$PROD_VER" ]; then
+            echo "::error::prod did not receive its first deployed version"
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Register first prod promote run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.wait_prod_first.outputs.run_id }}
+          expected-conclusion: success
+          reason: rollback-prod-seed-first
+          upload: 'true'
+
+      - name: Land a second source version so prod can advance again
         id: second
         env:
           GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
         run: |
           set -euo pipefail
-          # A rollback can only resolve a prior target once staging has carried two
-          # distinct deploy SHAs: the second deploy records the displaced state in
-          # staging's deploy-history ring. staging is the deployable env in this
-          # [staging, prod] model (prod is the publish boundary and emits no deploy
-          # jobs), so it is the env the manual rollback re-deploys. Land a second
-          # src change through branch -> PR -> rebase-merge so orchestrate deploys a
-          # new SHA to staging.
+          # prod now carries one version. Landing a second source change through
+          # branch -> PR -> rebase-merge fires orchestrate onto a new staging SHA
+          # and a new semver, which the next promote publishes and deploys to prod,
+          # pushing the first prod version into prod's deploy-history ring.
           git pull origin main --quiet
           PRIOR_SHA="$(yq eval '.ci.state.staging.sha // ""' .github/manifest.yaml)"
           echo "prior_sha=$PRIOR_SHA" >> "$GITHUB_OUTPUT"
@@ -812,25 +884,100 @@ jobs:
           reason: rollback-seed-orchestrate
           upload: 'true'
 
-      - name: Dispatch cascade-rollback.yaml for staging
+      - name: Promote the second version through to prod
+        id: prod_second
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # staging now carries the second version. A staging-to-prod cascade
+          # publishes it and deploys prod, advancing prod off its first version and
+          # pushing that first version into prod's deploy-history ring. That ring
+          # entry is the prior target the rollback resolves.
+          git pull origin main --quiet
+          PROD_PRIOR_VER="$(yq eval '.ci.state.prod.version // ""' .github/manifest.yaml)"
+          echo "prod_prior_ver=$PROD_PRIOR_VER" >> "$GITHUB_OUTPUT"
+          TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "dispatch_ts=$TS" >> "$GITHUB_OUTPUT"
+          gh workflow run promote.yaml \
+            -f mode=staging-to-prod \
+            --ref main
+
+      - name: Wait for the second prod promote to complete
+        id: wait_prod_second
+        env:
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          TS="${{ steps.prod_second.outputs.dispatch_ts }}"
+          PROD_PRIOR_VER="${{ steps.prod_second.outputs.prod_prior_ver }}"
+          MAX_ATTEMPTS=4
+          ATTEMPT=0
+          RUN_ID=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            RUN_ID=$(gh run list \
+              --workflow=promote.yaml \
+              --branch=main \
+              --created=">=$TS" \
+              --limit=1 \
+              --json=databaseId \
+              --jq='.[0].databaseId // empty' 2>/dev/null || echo "")
+            [ -n "$RUN_ID" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::promote.yaml run for $TS did not appear within timeout"
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --exit-status --interval 60
+          # Poll trunk until prod advances off its first version and records the
+          # prior entry in the deploy-history ring.
+          RING_VER=""
+          ATTEMPT=0
+          while [ "$ATTEMPT" -lt 3 ]; do
+            git pull origin main --quiet || true
+            PROD_VER="$(yq eval '.ci.state.prod.version // ""' .github/manifest.yaml)"
+            RING_VER="$(yq eval '.ci.state.prod.previous[0].version // ""' .github/manifest.yaml)"
+            if [ -n "$PROD_VER" ] && [ "$PROD_VER" != "$PROD_PRIOR_VER" ] && [ -n "$RING_VER" ]; then
+              break
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$RING_VER" ]; then
+            echo "::error::prod deploy-history ring is empty; rollback has no prior target"
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Register second prod promote run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.wait_prod_second.outputs.run_id }}
+          expected-conclusion: success
+          reason: rollback-prod-seed-second
+          upload: 'true'
+
+      - name: Dispatch cascade-rollback.yaml for prod
         id: dispatch_rollback
         env:
           GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
         run: |
           set -euo pipefail
-          # Capture the version staging will roll back FROM, and the prior version
-          # it should land ON (the previous ring entry), read from the manifest the
+          # Capture the version prod will roll back FROM, and the prior version it
+          # should land ON (the previous ring entry), read from the manifest the
           # same way the promote job reads release state (yq on .github/manifest.yaml).
           git pull origin main --quiet
-          CUR_VER="$(yq eval '.ci.state.staging.version // ""' .github/manifest.yaml)"
-          PRIOR_VER="$(yq eval '.ci.state.staging.previous[0].version // ""' .github/manifest.yaml)"
+          CUR_VER="$(yq eval '.ci.state.prod.version // ""' .github/manifest.yaml)"
+          PRIOR_VER="$(yq eval '.ci.state.prod.previous[0].version // ""' .github/manifest.yaml)"
           echo "cur_ver=$CUR_VER" >> "$GITHUB_OUTPUT"
           echo "prior_ver=$PRIOR_VER" >> "$GITHUB_OUTPUT"
           # Stamp the dispatch time so the wait correlates the run it created.
           TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "dispatch_ts=$TS" >> "$GITHUB_OUTPUT"
           gh workflow run cascade-rollback.yaml \
-            -f environment=staging \
+            -f environment=prod \
             -f dry_run=false \
             --ref main
 
@@ -871,41 +1018,41 @@ jobs:
           reason: rollback-dispatch
           upload: 'true'
 
-      - name: Assert staging rolled back to the prior version and marked diverged
+      - name: Assert prod rolled back to the prior version and marked diverged
         run: |
           set -euo pipefail
           CUR_VER="${{ steps.dispatch_rollback.outputs.cur_ver }}"
           PRIOR_VER="${{ steps.dispatch_rollback.outputs.prior_ver }}"
-          # Rollback re-writes staging, which already carried a version, so poll
-          # trunk until the rollback finalize state commit lands (staging version
-          # moves back to PRIOR_VER), then assert the divergence ref. Read via yq
-          # on the manifest, mirroring the promote job's read idiom.
+          # Rollback re-writes prod, which already carried a version, so poll trunk
+          # until the rollback finalize state commit lands (prod version moves back
+          # to PRIOR_VER), then assert the divergence ref. Read via yq on the
+          # manifest, mirroring the promote job's read idiom.
           MAX_ATTEMPTS=3
           ATTEMPT=0
           AFTER_VER=""
           while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
             git pull origin main --quiet || true
-            AFTER_VER="$(yq eval '.ci.state.staging.version // ""' .github/manifest.yaml)"
+            AFTER_VER="$(yq eval '.ci.state.prod.version // ""' .github/manifest.yaml)"
             if [ -n "$AFTER_VER" ] && [ "$AFTER_VER" != "$CUR_VER" ]; then
               break
             fi
             ATTEMPT=$((ATTEMPT + 1))
             sleep 60
           done
-          AFTER_REF="$(yq eval '.ci.state.staging.ref // ""' .github/manifest.yaml)"
+          AFTER_REF="$(yq eval '.ci.state.prod.ref // ""' .github/manifest.yaml)"
           if [ "$AFTER_VER" = "$CUR_VER" ]; then
-            echo "::error::staging version did not move back after rollback (still $CUR_VER)"
+            echo "::error::prod version did not move back after rollback (still $CUR_VER)"
             exit 1
           fi
           if [ -n "$PRIOR_VER" ] && [ "$AFTER_VER" != "$PRIOR_VER" ]; then
-            echo "::error::staging rolled back to '$AFTER_VER', expected prior '$PRIOR_VER'"
+            echo "::error::prod rolled back to '$AFTER_VER', expected prior '$PRIOR_VER'"
             exit 1
           fi
-          if [ "$AFTER_REF" != "rollback/staging" ]; then
-            echo "::error::staging not marked diverged: ref='$AFTER_REF', want 'rollback/staging'"
+          if [ "$AFTER_REF" != "rollback/prod" ]; then
+            echo "::error::prod not marked diverged: ref='$AFTER_REF', want 'rollback/prod'"
             exit 1
           fi
-          echo "✓ staging rolled back $CUR_VER -> $AFTER_VER, ref=$AFTER_REF"
+          echo "✓ prod rolled back $CUR_VER -> $AFTER_VER, ref=$AFTER_REF"
 
       - name: Write assertions summary
         if: always()
@@ -916,8 +1063,8 @@ jobs:
             echo "| Assertion | Result |"
             echo "|-----------|--------|"
             echo "| Rollback run completed | ✓ |"
-            echo "| Staging version moved back to prior | ✓ |"
-            echo "| Staging marked diverged (ref=rollback/staging) | ✓ |"
+            echo "| Prod version moved back to prior | ✓ |"
+            echo "| Prod marked diverged (ref=rollback/prod) | ✓ |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   dispatch-inputs-check:
