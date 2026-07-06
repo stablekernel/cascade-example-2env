@@ -1,96 +1,96 @@
 ci:
-    config:
-        schema_version: 1
-        trunk_branch: main
-        triggers:
-            - src/**
-        environments:
-            - staging
-            - prod
-        cli_version: v0.9.0-rc.0
-        cli_version_sha: 8362fd437923e6896704d1afc1fd079b2b8a1374
-        state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
-        manifest_file: .github/manifest.yaml
-        manifest_key: ci
-        builds:
-            - name: image
-              workflow: .github/workflows/build-image.yaml
-              triggers: []
-              state_tags:
-                - image_digest
-              matrix:
-                dimensions:
-                    arch:
-                        - amd64
-                        - arm64
-                    os:
-                        - linux
-                max_parallel: 2
-                fail_fast: false
-              artifact:
-                upload: dist/**
-            - name: bundle
-              workflow: .github/workflows/build-bundle.yaml
-              triggers: []
-              artifact:
-                downloads:
-                    - image
-        deploys:
-            - name: app
-              workflow: .github/workflows/deploy-app.yaml
-              triggers: []
-        publish:
-            workflow: .github/workflows/publish.yaml
-        dispatch_inputs:
-            force:
-                type: boolean
-                default: false
-                description: Force re-promote
-            reason:
-                type: string
-                description: Operator note for this manual run
-        pr_preview:
-            enabled: true
-            comment: true
-        environment_config:
-            prod:
-                gha_environment: prod
-    state:
-        prod:
-            sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
-            version: v0.1.0
-            committed_at: "2026-07-06T07:37:08Z"
-            committed_by: joshua-temple
-            deploys:
-                app:
-                    sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
-                    version: v0.1.0
-                    deployed_at: "2026-07-06T07:37:08Z"
-                    deployed_by: joshua-temple
-        release:
-            sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
-            version: v0.1.0
-            committed_at: "2026-07-06T07:35:58Z"
-            committed_by: github-actions[bot]
-        staging:
-            sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
-            version: v0.1.0-rc.0
-            committed_at: "2026-07-06T07:33:53Z"
-            committed_by: joshua-temple
-            builds:
-                bundle:
-                    sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
-                    artifact_id: bundle-bbfff38d100e93a25297f7104244ce6b1bc2ef02
-                image:
-                    sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
-                    artifact_id: image-linux-arm64
-            deploys:
-                app:
-                    sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
-                    deployed_at: "2026-07-06T07:33:53Z"
-                    deployed_by: joshua-temple
-    latest_release:
-        version: v0.1.0
-        sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
-        released_on: "2026-07-06T07:35:58Z"
-        released_by: github-actions[bot]
+  config:
+    schema_version: 1
+    trunk_branch: main
+    triggers:
+      - src/**
+    environments:
+      - staging
+      - prod
+    cli_version: v0.9.0-rc.0
+    cli_version_sha: 8362fd437923e6896704d1afc1fd079b2b8a1374
+    state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
+    manifest_file: .github/manifest.yaml
+    manifest_key: ci
+    builds:
+      - name: image
+        workflow: .github/workflows/build-image.yaml
+        triggers: []
+        state_tags:
+          - image_digest
+        matrix:
+          dimensions:
+            arch:
+              - amd64
+              - arm64
+            os:
+              - linux
+          max_parallel: 2
+          fail_fast: false
+        artifact:
+          upload: dist/**
+      - name: bundle
+        workflow: .github/workflows/build-bundle.yaml
+        triggers: []
+        artifact:
+          downloads:
+            - image
+    deploys:
+      - name: app
+        workflow: .github/workflows/deploy-app.yaml
+        triggers: []
+    publish:
+      workflow: .github/workflows/publish.yaml
+    dispatch_inputs:
+      force:
+        type: boolean
+        default: false
+        description: Force re-promote
+      reason:
+        type: string
+        description: Operator note for this manual run
+    pr_preview:
+      enabled: true
+      comment: true
+    environment_config:
+      prod:
+        gha_environment: prod
+  state:
+    prod:
+      sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
+      version: v0.1.0
+      committed_at: "2026-07-06T07:37:08Z"
+      committed_by: joshua-temple
+      deploys:
+        app:
+          sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
+          version: v0.1.0
+          deployed_at: "2026-07-06T07:37:08Z"
+          deployed_by: joshua-temple
+    release:
+      sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
+      version: v0.1.0
+      committed_at: "2026-07-06T07:35:58Z"
+      committed_by: github-actions[bot]
+    staging:
+      sha: 8b8d4a18b150f423e8d17bfcf18d2318f85511c2
+      version: v0.2.0-rc.0
+      committed_at: "2026-07-06T07:38:57Z"
+      committed_by: joshua-temple
+      builds:
+        bundle:
+          sha: 8b8d4a18b150f423e8d17bfcf18d2318f85511c2
+          artifact_id: bundle-8b8d4a18b150f423e8d17bfcf18d2318f85511c2
+        image:
+          sha: 8b8d4a18b150f423e8d17bfcf18d2318f85511c2
+          artifact_id: image-linux-arm64
+      deploys:
+        app:
+          sha: 8b8d4a18b150f423e8d17bfcf18d2318f85511c2
+          deployed_at: "2026-07-06T07:38:57Z"
+          deployed_by: joshua-temple
+  latest_release:
+    version: v0.1.0
+    sha: bbfff38d100e93a25297f7104244ce6b1bc2ef02
+    released_on: "2026-07-06T07:35:58Z"
+    released_by: github-actions[bot]
