@@ -57,17 +57,23 @@ ci:
                 gha_environment: prod
     state:
         prod:
-            sha: 9142cb2b0ece76c2ba570a853152df9b3560a2e7
-            version: v0.2.0
-            committed_at: "2026-07-06T20:07:50Z"
+            sha: 71207f10118394cac766ada9ec5b0c8ffb1fbcbd
+            version: v0.1.0
+            committed_at: "2026-07-06T20:08:47Z"
             committed_by: joshua-temple
             deploys:
                 app:
-                    sha: 9142cb2b0ece76c2ba570a853152df9b3560a2e7
-                    version: v0.2.0
-                    deployed_at: "2026-07-06T20:07:50Z"
+                    sha: 71207f10118394cac766ada9ec5b0c8ffb1fbcbd
+                    version: v0.1.0
+                    deployed_at: "2026-07-06T20:08:47Z"
                     deployed_by: joshua-temple
+            ref: rollback/prod
+            base_sha: 9142cb2b0ece76c2ba570a853152df9b3560a2e7
             previous:
+                - sha: 9142cb2b0ece76c2ba570a853152df9b3560a2e7
+                  version: v0.2.0
+                  committed_at: "2026-07-06T20:07:50Z"
+                  committed_by: joshua-temple
                 - sha: 71207f10118394cac766ada9ec5b0c8ffb1fbcbd
                   version: v0.1.0
                   committed_at: "2026-07-06T20:04:26Z"
