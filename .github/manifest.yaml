@@ -1,112 +1,112 @@
 ci:
-    config:
-        schema_version: 1
-        trunk_branch: main
-        triggers:
-            - src/**
-        environments:
-            - staging
-            - prod
-        cli_version: v0.13.0-rc.1
-        cli_version_sha: 3ed14b65af7c3922f45bca4126386fe8009e8027
-        state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
-        manifest_file: .github/manifest.yaml
-        manifest_key: ci
-        builds:
-            - name: image
-              workflow: .github/workflows/build-image.yaml
-              triggers: []
-              state_tags:
-                - image_digest
-              matrix:
-                dimensions:
-                    arch:
-                        - amd64
-                        - arm64
-                    os:
-                        - linux
-                max_parallel: 2
-                fail_fast: false
-              artifact:
-                upload: dist/**
-            - name: bundle
-              workflow: .github/workflows/build-bundle.yaml
-              triggers: []
-              artifact:
-                downloads:
-                    - image
-        deploys:
-            - name: app
-              workflow: .github/workflows/deploy-app.yaml
-              triggers: []
-        publish:
-            workflow: .github/workflows/publish.yaml
-        dispatch_inputs:
-            force:
-                type: boolean
-                default: false
-                description: Force re-promote
-            reason:
-                type: string
-                description: Operator note for this manual run
-        pr_preview:
-            enabled: true
-            comment: true
-        environment_config:
-            prod:
-                gha_environment: prod
-    state:
-        prod:
-            sha: 0f7e73f499a62ca5720e55b330d1f34949717bff
-            version: v0.1.0
-            committed_at: "2026-07-09T20:15:57Z"
-            committed_by: joshua-temple
-            deploys:
-                app:
-                    sha: 0f7e73f499a62ca5720e55b330d1f34949717bff
-                    version: v0.1.0
-                    deployed_at: "2026-07-09T20:15:57Z"
-                    deployed_by: joshua-temple
-            ref: rollback/prod
-            base_sha: 0b96354be22826922c18853f4f47ce58322f4550
-            previous:
-                - sha: 0b96354be22826922c18853f4f47ce58322f4550
-                  version: v0.2.0
-                  committed_at: "2026-07-09T20:15:11Z"
-                  committed_by: joshua-temple
-                - sha: 0f7e73f499a62ca5720e55b330d1f34949717bff
-                  version: v0.1.0
-                  committed_at: "2026-07-09T20:11:41Z"
-                  committed_by: joshua-temple
-        release:
-            sha: 0b96354be22826922c18853f4f47ce58322f4550
-            version: v0.2.0
-            committed_at: "2026-07-09T20:15:11Z"
-            committed_by: joshua-temple
-            previous:
-                - sha: 0f7e73f499a62ca5720e55b330d1f34949717bff
-                  version: v0.1.0
-                  committed_at: "2026-07-09T20:10:34Z"
-                  committed_by: github-actions[bot]
-        staging:
-            sha: 0b96354be22826922c18853f4f47ce58322f4550
-            version: v0.2.0-rc.0
-            committed_at: "2026-07-09T20:13:27Z"
-            committed_by: joshua-temple
-            builds:
-                bundle:
-                    sha: 0b96354be22826922c18853f4f47ce58322f4550
-                    artifact_id: bundle-0b96354be22826922c18853f4f47ce58322f4550
-                image:
-                    sha: 0b96354be22826922c18853f4f47ce58322f4550
-                    artifact_id: image-linux-amd64
-            deploys:
-                app:
-                    sha: 0b96354be22826922c18853f4f47ce58322f4550
-                    deployed_at: "2026-07-09T20:13:27Z"
-                    deployed_by: joshua-temple
-    latest_release:
-        version: v0.2.0
-        sha: 0b96354be22826922c18853f4f47ce58322f4550
-        released_on: "2026-07-09T20:15:11Z"
-        released_by: joshua-temple
+  config:
+    schema_version: 1
+    trunk_branch: main
+    triggers:
+      - src/**
+    environments:
+      - staging
+      - prod
+    cli_version: v0.13.0-rc.1
+    cli_version_sha: 3ed14b65af7c3922f45bca4126386fe8009e8027
+    state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
+    manifest_file: .github/manifest.yaml
+    manifest_key: ci
+    builds:
+      - name: image
+        workflow: .github/workflows/build-image.yaml
+        triggers: []
+        state_tags:
+          - image_digest
+        matrix:
+          dimensions:
+            arch:
+              - amd64
+              - arm64
+            os:
+              - linux
+          max_parallel: 2
+          fail_fast: false
+        artifact:
+          upload: dist/**
+      - name: bundle
+        workflow: .github/workflows/build-bundle.yaml
+        triggers: []
+        artifact:
+          downloads:
+            - image
+    deploys:
+      - name: app
+        workflow: .github/workflows/deploy-app.yaml
+        triggers: []
+    publish:
+      workflow: .github/workflows/publish.yaml
+    dispatch_inputs:
+      force:
+        type: boolean
+        default: false
+        description: Force re-promote
+      reason:
+        type: string
+        description: Operator note for this manual run
+    pr_preview:
+      enabled: true
+      comment: true
+    environment_config:
+      prod:
+        gha_environment: prod
+  state:
+    prod:
+      sha: 0f7e73f499a62ca5720e55b330d1f34949717bff
+      version: v0.1.0
+      committed_at: "2026-07-09T20:15:57Z"
+      committed_by: joshua-temple
+      deploys:
+        app:
+          sha: 0f7e73f499a62ca5720e55b330d1f34949717bff
+          version: v0.1.0
+          deployed_at: "2026-07-09T20:15:57Z"
+          deployed_by: joshua-temple
+      ref: rollback/prod
+      base_sha: 0b96354be22826922c18853f4f47ce58322f4550
+      previous:
+        - sha: 0b96354be22826922c18853f4f47ce58322f4550
+          version: v0.2.0
+          committed_at: "2026-07-09T20:15:11Z"
+          committed_by: joshua-temple
+        - sha: 0f7e73f499a62ca5720e55b330d1f34949717bff
+          version: v0.1.0
+          committed_at: "2026-07-09T20:11:41Z"
+          committed_by: joshua-temple
+    release:
+      sha: 0b96354be22826922c18853f4f47ce58322f4550
+      version: v0.2.0
+      committed_at: "2026-07-09T20:15:11Z"
+      committed_by: joshua-temple
+      previous:
+        - sha: 0f7e73f499a62ca5720e55b330d1f34949717bff
+          version: v0.1.0
+          committed_at: "2026-07-09T20:10:34Z"
+          committed_by: github-actions[bot]
+    staging:
+      sha: 40a6b7e874c4778a924ef3e031d9c515c19abaec
+      version: v0.2.0-rc.1
+      committed_at: "2026-07-09T20:17:44Z"
+      committed_by: github-actions[bot]
+      builds:
+        bundle:
+          sha: 40a6b7e874c4778a924ef3e031d9c515c19abaec
+          artifact_id: bundle-dispatch-sentinel-29046747270-10567
+        image:
+          sha: 40a6b7e874c4778a924ef3e031d9c515c19abaec
+          artifact_id: image-linux-amd64
+      deploys:
+        app:
+          sha: 40a6b7e874c4778a924ef3e031d9c515c19abaec
+          deployed_at: "2026-07-09T20:17:44Z"
+          deployed_by: github-actions[bot]
+  latest_release:
+    version: v0.2.0
+    sha: 0b96354be22826922c18853f4f47ce58322f4550
+    released_on: "2026-07-09T20:15:11Z"
+    released_by: joshua-temple
