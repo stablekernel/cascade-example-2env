@@ -56,7 +56,17 @@ ci:
             prod:
                 gha_environment: prod
     state:
-        prod: {}
+        prod:
+            sha: 1e7f4c07182e73d48de8d3e9c5e6ac34bcacb918
+            version: v0.1.0
+            committed_at: "2026-07-10T00:49:24Z"
+            committed_by: joshua-temple
+            deploys:
+                app:
+                    sha: 1e7f4c07182e73d48de8d3e9c5e6ac34bcacb918
+                    version: v0.1.0
+                    deployed_at: "2026-07-10T00:49:24Z"
+                    deployed_by: joshua-temple
         release:
             sha: 1e7f4c07182e73d48de8d3e9c5e6ac34bcacb918
             version: v0.1.0
