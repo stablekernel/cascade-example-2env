@@ -1,96 +1,96 @@
 ci:
-    config:
-        schema_version: 1
-        trunk_branch: main
-        triggers:
-            - src/**
-        environments:
-            - staging
-            - prod
-        cli_version: v0.14.0-rc.1
-        cli_version_sha: 0b49ccc9e371d97e7bad2090e8ad96a911021168
-        state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
-        manifest_file: .github/manifest.yaml
-        manifest_key: ci
-        builds:
-            - name: image
-              workflow: .github/workflows/build-image.yaml
-              triggers: []
-              state_tags:
-                - image_digest
-              matrix:
-                dimensions:
-                    arch:
-                        - amd64
-                        - arm64
-                    os:
-                        - linux
-                max_parallel: 2
-                fail_fast: false
-              artifact:
-                upload: dist/**
-            - name: bundle
-              workflow: .github/workflows/build-bundle.yaml
-              triggers: []
-              artifact:
-                downloads:
-                    - image
-        deploys:
-            - name: app
-              workflow: .github/workflows/deploy-app.yaml
-              triggers: []
-        publish:
-            workflow: .github/workflows/publish.yaml
-        dispatch_inputs:
-            force:
-                type: boolean
-                default: false
-                description: Force re-promote
-            reason:
-                type: string
-                description: Operator note for this manual run
-        pr_preview:
-            enabled: true
-            comment: true
-        environment_config:
-            prod:
-                gha_environment: prod
-    state:
-        prod:
-            sha: 54c312c073eff026e2f64eb3c691db2c2811d519
-            version: v0.1.0
-            committed_at: "2026-07-11T01:35:25Z"
-            committed_by: joshua-temple
-            deploys:
-                app:
-                    sha: 54c312c073eff026e2f64eb3c691db2c2811d519
-                    version: v0.1.0
-                    deployed_at: "2026-07-11T01:35:25Z"
-                    deployed_by: joshua-temple
-        release:
-            sha: 54c312c073eff026e2f64eb3c691db2c2811d519
-            version: v0.1.0
-            committed_at: "2026-07-11T01:34:02Z"
-            committed_by: github-actions[bot]
-        staging:
-            sha: 54c312c073eff026e2f64eb3c691db2c2811d519
-            version: v0.1.0-rc.0
-            committed_at: "2026-07-11T01:32:15Z"
-            committed_by: joshua-temple
-            builds:
-                bundle:
-                    sha: 54c312c073eff026e2f64eb3c691db2c2811d519
-                    artifact_id: bundle-54c312c073eff026e2f64eb3c691db2c2811d519
-                image:
-                    sha: 54c312c073eff026e2f64eb3c691db2c2811d519
-                    artifact_id: image-linux-amd64
-            deploys:
-                app:
-                    sha: 54c312c073eff026e2f64eb3c691db2c2811d519
-                    deployed_at: "2026-07-11T01:32:15Z"
-                    deployed_by: joshua-temple
-    latest_release:
-        version: v0.1.0
-        sha: 54c312c073eff026e2f64eb3c691db2c2811d519
-        released_on: "2026-07-11T01:34:02Z"
-        released_by: github-actions[bot]
+  config:
+    schema_version: 1
+    trunk_branch: main
+    triggers:
+      - src/**
+    environments:
+      - staging
+      - prod
+    cli_version: v0.14.0-rc.1
+    cli_version_sha: 0b49ccc9e371d97e7bad2090e8ad96a911021168
+    state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
+    manifest_file: .github/manifest.yaml
+    manifest_key: ci
+    builds:
+      - name: image
+        workflow: .github/workflows/build-image.yaml
+        triggers: []
+        state_tags:
+          - image_digest
+        matrix:
+          dimensions:
+            arch:
+              - amd64
+              - arm64
+            os:
+              - linux
+          max_parallel: 2
+          fail_fast: false
+        artifact:
+          upload: dist/**
+      - name: bundle
+        workflow: .github/workflows/build-bundle.yaml
+        triggers: []
+        artifact:
+          downloads:
+            - image
+    deploys:
+      - name: app
+        workflow: .github/workflows/deploy-app.yaml
+        triggers: []
+    publish:
+      workflow: .github/workflows/publish.yaml
+    dispatch_inputs:
+      force:
+        type: boolean
+        default: false
+        description: Force re-promote
+      reason:
+        type: string
+        description: Operator note for this manual run
+    pr_preview:
+      enabled: true
+      comment: true
+    environment_config:
+      prod:
+        gha_environment: prod
+  state:
+    prod:
+      sha: 54c312c073eff026e2f64eb3c691db2c2811d519
+      version: v0.1.0
+      committed_at: "2026-07-11T01:35:25Z"
+      committed_by: joshua-temple
+      deploys:
+        app:
+          sha: 54c312c073eff026e2f64eb3c691db2c2811d519
+          version: v0.1.0
+          deployed_at: "2026-07-11T01:35:25Z"
+          deployed_by: joshua-temple
+    release:
+      sha: 54c312c073eff026e2f64eb3c691db2c2811d519
+      version: v0.1.0
+      committed_at: "2026-07-11T01:34:02Z"
+      committed_by: github-actions[bot]
+    staging:
+      sha: a018369cc095c0c425057a8fe38e047762096542
+      version: v0.2.0-rc.0
+      committed_at: "2026-07-11T01:37:05Z"
+      committed_by: joshua-temple
+      builds:
+        bundle:
+          sha: a018369cc095c0c425057a8fe38e047762096542
+          artifact_id: bundle-a018369cc095c0c425057a8fe38e047762096542
+        image:
+          sha: a018369cc095c0c425057a8fe38e047762096542
+          artifact_id: image-linux-arm64
+      deploys:
+        app:
+          sha: a018369cc095c0c425057a8fe38e047762096542
+          deployed_at: "2026-07-11T01:37:05Z"
+          deployed_by: joshua-temple
+  latest_release:
+    version: v0.1.0
+    sha: 54c312c073eff026e2f64eb3c691db2c2811d519
+    released_on: "2026-07-11T01:34:02Z"
+    released_by: github-actions[bot]
