@@ -7,8 +7,8 @@ ci:
     environments:
       - staging
       - prod
-    cli_version: v0.14.1-dryrun.58
-    cli_version_sha: 33f8865a69ee8c318876539582e15e4ccee3949e
+    cli_version: v0.14.2-rc.0
+    cli_version_sha: 94728b7e8cd84a8aec359e85ee9349c614de0b88
     state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
     manifest_file: .github/manifest.yaml
     manifest_key: ci
@@ -90,7 +90,7 @@ ci:
           committed_by: github-actions[bot]
     staging:
       sha: e4f9484eace0696ecc8e6a694ae182112249e967
-      version: v0.2.0-rc.1
+      version: v0.14.2-rc.0
       committed_at: "2026-07-11T10:20:50Z"
       committed_by: github-actions[bot]
       builds:
