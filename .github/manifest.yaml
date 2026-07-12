@@ -6,7 +6,8 @@ ci:
       - src/**
     environments:
       - staging
-      - prod
+      - name: prod
+        gha_environment: prod
     cli_version: v0.14.2-rc.0
     cli_version_sha: 94728b7e8cd84a8aec359e85ee9349c614de0b88
     state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
@@ -27,12 +28,12 @@ ci:
               - linux
           max_parallel: 2
           fail_fast: false
-        artifact:
+        artifact_upload:
           upload: dist/**
       - name: bundle
         workflow: .github/workflows/build-bundle.yaml
         triggers: []
-        artifact:
+        artifact_upload:
           downloads:
             - image
     deploys:
@@ -52,9 +53,6 @@ ci:
     pr_preview:
       enabled: true
       comment: true
-    environment_config:
-      prod:
-        gha_environment: prod
   state:
     prod:
       sha: e7db799f21e6208e0e1ad59d3ac422869a742ffd
