@@ -31,7 +31,7 @@ jobs:
 
       - name: Validate manifest
         run: |
-          cascade parse-config --config .github/manifest.yaml
+          cascade lint --config .github/manifest.yaml
 
       - name: Detect changes
         env:
