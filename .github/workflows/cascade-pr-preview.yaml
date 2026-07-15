@@ -24,9 +24,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.16.0-rc.0
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.16.1-rc.0
         with:
-          version: v0.16.0-rc.0
+          version: v0.16.1-rc.0
           token: ${{ github.token }}
 
       - name: Validate manifest
@@ -74,18 +74,21 @@ jobs:
             fi
           } > cascade-summary.md
           cat cascade-summary.md >> "$GITHUB_STEP_SUMMARY"
+          CASCADE_DELIM="$(dd if=/dev/urandom bs=15 count=1 status=none | base64)"
           {
-            echo 'body<<CASCADE_EOF'
+            echo "body<<${CASCADE_DELIM}"
             cat cascade-summary.md
-            echo 'CASCADE_EOF'
+            echo "${CASCADE_DELIM}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Post plan comment
         uses: actions/github-script@v9
+        env:
+          PLAN_BODY: ${{ steps.summary.outputs.body }}
         with:
           script: |
             const marker = '<!-- cascade-pr-preview -->';
-            const body = marker + '\n' + `${{ steps.summary.outputs.body }}`;
+            const body = marker + '\n' + process.env.PLAN_BODY;
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;
             const comments = await github.paginate(github.rest.issues.listComments, {
