@@ -54,7 +54,17 @@ ci:
             enabled: true
             comment: true
     state:
-        prod: {}
+        prod:
+            sha: d79434c475de923ed99fbc6618dae2ab9f219a15
+            version: v0.1.0
+            committed_at: "2026-07-16T18:53:45Z"
+            committed_by: joshua-temple
+            deploys:
+                app:
+                    sha: d79434c475de923ed99fbc6618dae2ab9f219a15
+                    version: v0.1.0
+                    deployed_at: "2026-07-16T18:53:45Z"
+                    deployed_by: joshua-temple
         release:
             sha: d79434c475de923ed99fbc6618dae2ab9f219a15
             version: v0.1.0
