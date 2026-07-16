@@ -56,7 +56,7 @@ ci:
   state:
     staging:
       sha: 206145d3ad5bcdf699027c73022bbd1d2c1b592b
-      version: v0.1.0-rc.0
+      version: v0.16.2-rc.2
       committed_at: "2026-07-16T22:20:59Z"
       committed_by: joshua-temple
       deploys:
