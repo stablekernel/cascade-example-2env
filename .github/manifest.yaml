@@ -8,8 +8,8 @@ ci:
       - staging
       - name: prod
         gha_environment: prod
-    cli_version: v0.16.2-rc.1
-    cli_version_sha: bd09d0d085c348317c2d718e4bf54bbf8f583a6c
+    cli_version: v0.16.2-rc.2
+    cli_version_sha: 24a911250c5f899cac8bbe97a5170286c99978fb
     state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
     manifest_file: .github/manifest.yaml
     manifest_key: ci
@@ -88,7 +88,7 @@ ci:
           committed_by: github-actions[bot]
     staging:
       sha: 166ecd367f82809ae08a29f89b6dcdb2c101714e
-      version: v0.2.0-rc.1
+      version: v0.16.2-rc.2
       committed_at: "2026-07-16T19:00:03Z"
       committed_by: github-actions[bot]
       builds:
