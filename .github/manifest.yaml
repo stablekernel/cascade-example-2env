@@ -1,110 +1,55 @@
 ci:
-  config:
-    schema_version: 1
-    trunk_branch: main
-    triggers:
-      - src/**
-    environments:
-      - staging
-      - name: prod
-        gha_environment: prod
-    cli_version: v0.16.2-rc.2
-    cli_version_sha: 24a911250c5f899cac8bbe97a5170286c99978fb
-    state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
-    manifest_file: .github/manifest.yaml
-    manifest_key: ci
-    builds:
-      - name: image
-        workflow: .github/workflows/build-image.yaml
-        triggers: []
-        state_tags:
-          - image_digest
-        matrix:
-          dimensions:
-            arch:
-              - amd64
-              - arm64
-            os:
-              - linux
-          max_parallel: 2
-          fail_fast: false
-        artifact_upload:
-          upload: dist/**
-      - name: bundle
-        workflow: .github/workflows/build-bundle.yaml
-        triggers: []
-        artifact_upload:
-          downloads:
-            - image
-    deploys:
-      - name: app
-        workflow: .github/workflows/deploy-app.yaml
-        triggers: []
-    publish:
-      workflow: .github/workflows/publish.yaml
-    dispatch_inputs:
-      force:
-        type: boolean
-        default: false
-        description: Force re-promote
-      reason:
-        type: string
-        description: Operator note for this manual run
-    pr_preview:
-      enabled: true
-      comment: true
-  state:
-    prod:
-      sha: d79434c475de923ed99fbc6618dae2ab9f219a15
-      version: v0.1.0
-      committed_at: "2026-07-16T18:58:04Z"
-      committed_by: joshua-temple
-      deploys:
-        app:
-          sha: d79434c475de923ed99fbc6618dae2ab9f219a15
-          version: v0.1.0
-          deployed_at: "2026-07-16T18:58:04Z"
-          deployed_by: joshua-temple
-      ref: rollback/prod
-      base_sha: b73599ae6bc991650584474704d9ba4782dc51d7
-      previous:
-        - sha: b73599ae6bc991650584474704d9ba4782dc51d7
-          version: v0.2.0
-          committed_at: "2026-07-16T18:57:14Z"
-          committed_by: joshua-temple
-        - sha: d79434c475de923ed99fbc6618dae2ab9f219a15
-          version: v0.1.0
-          committed_at: "2026-07-16T18:53:45Z"
-          committed_by: joshua-temple
-    release:
-      sha: b73599ae6bc991650584474704d9ba4782dc51d7
-      version: v0.2.0
-      committed_at: "2026-07-16T18:57:14Z"
-      committed_by: joshua-temple
-      previous:
-        - sha: d79434c475de923ed99fbc6618dae2ab9f219a15
-          version: v0.1.0
-          committed_at: "2026-07-16T18:52:33Z"
-          committed_by: github-actions[bot]
-    staging:
-      sha: 166ecd367f82809ae08a29f89b6dcdb2c101714e
-      version: v0.16.2-rc.2
-      committed_at: "2026-07-16T19:00:03Z"
-      committed_by: github-actions[bot]
-      builds:
-        bundle:
-          sha: 166ecd367f82809ae08a29f89b6dcdb2c101714e
-          artifact_id: bundle-dispatch-sentinel-29525484192-1052
-        image:
-          sha: 166ecd367f82809ae08a29f89b6dcdb2c101714e
-          artifact_id: image-linux-arm64
-      deploys:
-        app:
-          sha: 166ecd367f82809ae08a29f89b6dcdb2c101714e
-          deployed_at: "2026-07-16T19:00:03Z"
-          deployed_by: github-actions[bot]
-  latest_release:
-    version: v0.2.0
-    sha: b73599ae6bc991650584474704d9ba4782dc51d7
-    released_on: "2026-07-16T18:57:14Z"
-    released_by: joshua-temple
+    config:
+        schema_version: 1
+        trunk_branch: main
+        triggers:
+            - src/**
+        environments:
+            - staging
+            - name: prod
+              gha_environment: prod
+        cli_version: v0.16.2-rc.2
+        cli_version_sha: 24a911250c5f899cac8bbe97a5170286c99978fb
+        state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
+        manifest_file: .github/manifest.yaml
+        manifest_key: ci
+        builds:
+            - name: image
+              workflow: .github/workflows/build-image.yaml
+              triggers: []
+              state_tags:
+                - image_digest
+              matrix:
+                dimensions:
+                    arch:
+                        - amd64
+                        - arm64
+                    os:
+                        - linux
+                max_parallel: 2
+                fail_fast: false
+              artifact_upload:
+                upload: dist/**
+            - name: bundle
+              workflow: .github/workflows/build-bundle.yaml
+              triggers: []
+              artifact_upload:
+                downloads:
+                    - image
+        deploys:
+            - name: app
+              workflow: .github/workflows/deploy-app.yaml
+              triggers: []
+        publish:
+            workflow: .github/workflows/publish.yaml
+        dispatch_inputs:
+            force:
+                type: boolean
+                default: false
+                description: Force re-promote
+            reason:
+                type: string
+                description: Operator note for this manual run
+        pr_preview:
+            enabled: true
+            comment: true
