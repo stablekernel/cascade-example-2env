@@ -54,7 +54,17 @@ ci:
             enabled: true
             comment: true
     state:
-        prod: {}
+        prod:
+            sha: c628139d0da0f915d694d4205f8a73bb886d931b
+            version: v0.1.0
+            committed_at: "2026-07-19T08:34:02Z"
+            committed_by: stablekerneltokenbot[bot]
+            deploys:
+                app:
+                    sha: c628139d0da0f915d694d4205f8a73bb886d931b
+                    version: v0.1.0
+                    deployed_at: "2026-07-19T08:34:02Z"
+                    deployed_by: stablekerneltokenbot[bot]
         release:
             sha: c628139d0da0f915d694d4205f8a73bb886d931b
             version: v0.1.0
