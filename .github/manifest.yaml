@@ -1,73 +1,84 @@
 ci:
-  config:
-    schema_version: 1
-    trunk_branch: main
-    triggers:
-      - src/**
-    environments:
-      - staging
-      - name: prod
-        gha_environment: prod
-    cli_version: v0.16.5-rc.1
-    cli_version_sha: 148cf877cf7f78f0a66fd6407e9c5e06e601c858
-    state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
-    manifest_file: .github/manifest.yaml
-    manifest_key: ci
-    builds:
-      - name: image
-        workflow: .github/workflows/build-image.yaml
-        triggers: []
-        state_tags:
-          - image_digest
-        matrix:
-          dimensions:
-            arch:
-              - amd64
-              - arm64
-            os:
-              - linux
-          max_parallel: 2
-          fail_fast: false
-        artifact_upload:
-          upload: dist/**
-      - name: bundle
-        workflow: .github/workflows/build-bundle.yaml
-        triggers: []
-        artifact_upload:
-          downloads:
-            - image
-    deploys:
-      - name: app
-        workflow: .github/workflows/deploy-app.yaml
-        triggers: []
-    publish:
-      workflow: .github/workflows/publish.yaml
-    dispatch_inputs:
-      force:
-        type: boolean
-        default: false
-        description: Force re-promote
-      reason:
-        type: string
-        description: Operator note for this manual run
-    pr_preview:
-      enabled: true
-      comment: true
-  state:
-    staging:
-      sha: c628139d0da0f915d694d4205f8a73bb886d931b
-      version: v0.1.0-rc.0
-      committed_at: "2026-07-19T08:30:48Z"
-      committed_by: stablekerneltokenbot[bot]
-      deploys:
-        app:
-          sha: c628139d0da0f915d694d4205f8a73bb886d931b
-          deployed_at: "2026-07-19T08:30:48Z"
-          deployed_by: stablekerneltokenbot[bot]
-      builds:
-        image:
-          sha: c628139d0da0f915d694d4205f8a73bb886d931b
-          artifact_id: image-linux-arm64
-        bundle:
-          sha: c628139d0da0f915d694d4205f8a73bb886d931b
-          artifact_id: bundle-c628139d0da0f915d694d4205f8a73bb886d931b
+    config:
+        schema_version: 1
+        trunk_branch: main
+        triggers:
+            - src/**
+        environments:
+            - staging
+            - name: prod
+              gha_environment: prod
+        cli_version: v0.16.5-rc.1
+        cli_version_sha: 148cf877cf7f78f0a66fd6407e9c5e06e601c858
+        state_token: ${{ secrets.CASCADE_STATE_TOKEN }}
+        manifest_file: .github/manifest.yaml
+        manifest_key: ci
+        builds:
+            - name: image
+              workflow: .github/workflows/build-image.yaml
+              triggers: []
+              state_tags:
+                - image_digest
+              matrix:
+                dimensions:
+                    arch:
+                        - amd64
+                        - arm64
+                    os:
+                        - linux
+                max_parallel: 2
+                fail_fast: false
+              artifact_upload:
+                upload: dist/**
+            - name: bundle
+              workflow: .github/workflows/build-bundle.yaml
+              triggers: []
+              artifact_upload:
+                downloads:
+                    - image
+        deploys:
+            - name: app
+              workflow: .github/workflows/deploy-app.yaml
+              triggers: []
+        publish:
+            workflow: .github/workflows/publish.yaml
+        dispatch_inputs:
+            force:
+                type: boolean
+                default: false
+                description: Force re-promote
+            reason:
+                type: string
+                description: Operator note for this manual run
+        pr_preview:
+            enabled: true
+            comment: true
+    state:
+        prod: {}
+        release:
+            sha: c628139d0da0f915d694d4205f8a73bb886d931b
+            version: v0.1.0
+            committed_at: "2026-07-19T08:32:45Z"
+            committed_by: github-actions[bot]
+        staging:
+            sha: c628139d0da0f915d694d4205f8a73bb886d931b
+            version: v0.1.0-rc.0
+            committed_at: "2026-07-19T08:30:48Z"
+            committed_by: stablekerneltokenbot[bot]
+            builds:
+                bundle:
+                    sha: c628139d0da0f915d694d4205f8a73bb886d931b
+                    artifact_id: bundle-c628139d0da0f915d694d4205f8a73bb886d931b
+                image:
+                    sha: c628139d0da0f915d694d4205f8a73bb886d931b
+                    artifact_id: image-linux-arm64
+            deploys:
+                app:
+                    sha: c628139d0da0f915d694d4205f8a73bb886d931b
+                    deployed_at: "2026-07-19T08:30:48Z"
+                    deployed_by: stablekerneltokenbot[bot]
+    latest_release:
+        version: v0.1.0
+        sha: c628139d0da0f915d694d4205f8a73bb886d931b
+        released_on: "2026-07-19T08:32:45Z"
+        released_by: github-actions[bot]
