@@ -55,17 +55,23 @@ ci:
             comment: true
     state:
         prod:
-            sha: 4b5e81589feed7551747b10c268ce5bd89bfff01
-            version: v0.2.0
-            committed_at: "2026-07-19T08:37:19Z"
+            sha: c628139d0da0f915d694d4205f8a73bb886d931b
+            version: v0.1.0
+            committed_at: "2026-07-19T08:38:07Z"
             committed_by: stablekerneltokenbot[bot]
             deploys:
                 app:
-                    sha: 4b5e81589feed7551747b10c268ce5bd89bfff01
-                    version: v0.2.0
-                    deployed_at: "2026-07-19T08:37:19Z"
+                    sha: c628139d0da0f915d694d4205f8a73bb886d931b
+                    version: v0.1.0
+                    deployed_at: "2026-07-19T08:38:07Z"
                     deployed_by: stablekerneltokenbot[bot]
+            ref: rollback/prod
+            base_sha: 4b5e81589feed7551747b10c268ce5bd89bfff01
             previous:
+                - sha: 4b5e81589feed7551747b10c268ce5bd89bfff01
+                  version: v0.2.0
+                  committed_at: "2026-07-19T08:37:19Z"
+                  committed_by: stablekerneltokenbot[bot]
                 - sha: c628139d0da0f915d694d4205f8a73bb886d931b
                   version: v0.1.0
                   committed_at: "2026-07-19T08:34:02Z"
