@@ -88,7 +88,7 @@ ci:
           committed_by: github-actions[bot]
     staging:
       sha: 44efe83818c1bdc53bc9f713b9fb80494a5c23b5
-      version: v0.2.0-rc.1
+      version: v0.16.5-rc.2
       committed_at: "2026-07-19T19:36:39Z"
       committed_by: github-actions[bot]
       builds:
