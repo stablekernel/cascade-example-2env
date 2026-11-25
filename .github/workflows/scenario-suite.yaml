@@ -264,6 +264,31 @@ jobs:
           gh pr create --base main --head "$BRANCH" \
             --title "feat: dummy src change for scenario test" \
             --body "Automated scenario run; drives orchestrate on merge."
+
+          # The PR fires cascade-pr-preview.yaml on its head SHA. Merging first
+          # deletes the branch and refs/pull/N/merge before the preview run
+          # checks out, so checkout falls back to main and the preview fails.
+          # Wait for that run to appear and finish before merging. No
+          # --exit-status: a red preview must surface via the reconcile ledger,
+          # not abort the seed.
+          MAX_ATTEMPTS=5
+          ATTEMPT=0
+          PREVIEW_RUN_ID=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            PREVIEW_RUN_ID=$(gh run list \
+              --workflow=cascade-pr-preview.yaml \
+              --json=databaseId,headSha \
+              --jq=".[] | select(.headSha==\"$SEED_HEAD_SHA\") | .databaseId" 2>/dev/null | head -n1 || echo "")
+            [ -n "$PREVIEW_RUN_ID" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$PREVIEW_RUN_ID" ]; then
+            echo "::error::Cascade PR Preview run for seed head $SEED_HEAD_SHA did not appear within timeout"
+            exit 1
+          fi
+          gh run watch "$PREVIEW_RUN_ID" --interval 30
+
           gh pr merge "$BRANCH" --rebase --delete-branch
 
           # Capture the merge SHA on trunk; it keys the orchestrate wait.
@@ -823,6 +848,29 @@ jobs:
           gh pr create --base main --head "$BRANCH" \
             --title "feat: second staging version for rollback test" \
             --body "Automated scenario run; drives orchestrate on merge."
+
+          # Same preview race as the first seed: wait for this PR's
+          # cascade-pr-preview.yaml run (keyed by head SHA) to appear and finish
+          # before the rebase-merge deletes the branch and its pull ref. No
+          # --exit-status: a red preview is reported by the reconcile ledger.
+          MAX_ATTEMPTS=5
+          ATTEMPT=0
+          PREVIEW_RUN_ID=""
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            PREVIEW_RUN_ID=$(gh run list \
+              --workflow=cascade-pr-preview.yaml \
+              --json=databaseId,headSha \
+              --jq=".[] | select(.headSha==\"$SEED_HEAD_SHA\") | .databaseId" 2>/dev/null | head -n1 || echo "")
+            [ -n "$PREVIEW_RUN_ID" ] && break
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 60
+          done
+          if [ -z "$PREVIEW_RUN_ID" ]; then
+            echo "::error::Cascade PR Preview run for rollback seed head $SEED_HEAD_SHA did not appear within timeout"
+            exit 1
+          fi
+          gh run watch "$PREVIEW_RUN_ID" --interval 30
+
           gh pr merge "$BRANCH" --rebase --delete-branch
           git fetch origin main --quiet
           MERGE_SHA="$(git rev-parse origin/main)"
